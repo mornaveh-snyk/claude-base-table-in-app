@@ -1,16 +1,19 @@
 "use client";
 
-import { useState } from "react";
-import { X, ChevronDown, Check } from "lucide-react";
+import { useState, useEffect } from "react";
+import { X, ChevronDown, Check, Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   FILTER_FIELDS,
   getOperatorsForFieldType,
   getDefaultOperator,
   generateId,
+  createEmptyGroup,
+  type AdvancedFilterQuery,
+  type FilterGroup,
   type FilterCondition,
-  type SimpleFilterState,
   type FilterOperator,
+  type LogicalOperator,
   type FieldDefinition,
 } from "@/lib/utils";
 import {
@@ -21,11 +24,56 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
-interface SimpleFilterBarProps {
-  filters: SimpleFilterState;
-  onFiltersChange: (filters: SimpleFilterState) => void;
-  onAdvancedClick: () => void;
-  showAdvancedLink?: boolean;
+interface AdvancedFilterPopoverProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  query: AdvancedFilterQuery;
+  onApply: (query: AdvancedFilterQuery) => void;
+  onCancel: () => void;
+  trigger?: React.ReactNode;
+}
+
+// Combinator toggle (AND/OR)
+function CombinatorToggle({
+  value,
+  onChange,
+  size = "default",
+}: {
+  value: LogicalOperator;
+  onChange: (value: LogicalOperator) => void;
+  size?: "default" | "small";
+}) {
+  return (
+    <div
+      className={cn(
+        "flex items-center rounded-md border border-border bg-card overflow-hidden",
+        size === "small" ? "text-[10px]" : "text-xs"
+      )}
+    >
+      <button
+        onClick={() => onChange("and")}
+        className={cn(
+          "px-2 py-1 font-semibold uppercase transition-colors",
+          value === "and"
+            ? "bg-primary text-primary-foreground"
+            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+        )}
+      >
+        AND
+      </button>
+      <button
+        onClick={() => onChange("or")}
+        className={cn(
+          "px-2 py-1 font-semibold uppercase transition-colors border-l border-border",
+          value === "or"
+            ? "bg-amber-500 text-white"
+            : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+        )}
+      >
+        OR
+      </button>
+    </div>
+  );
 }
 
 // Field selector dropdown
@@ -45,8 +93,8 @@ function FieldSelector({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "flex items-center gap-1 px-2 py-1 text-xs font-medium rounded-l border-r border-border",
-            "bg-secondary/50 hover:bg-secondary transition-colors min-w-[80px]"
+            "flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-border",
+            "bg-card hover:bg-secondary transition-colors min-w-[100px]"
           )}
         >
           <span className="truncate">{label}</span>
@@ -99,15 +147,15 @@ function OperatorSelector({
       <PopoverTrigger asChild>
         <button
           className={cn(
-            "flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground",
-            "hover:bg-secondary hover:text-foreground transition-colors border-r border-border"
+            "flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-border",
+            "bg-card hover:bg-secondary transition-colors min-w-[80px]"
           )}
         >
-          <span className="truncate">{label}</span>
-          <ChevronDown className="w-3 h-3 shrink-0" />
+          <span className="truncate text-muted-foreground">{label}</span>
+          <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="w-44 p-1" align="start" sideOffset={4}>
+      <PopoverContent className="w-48 p-1" align="start" sideOffset={4}>
         <div className="flex flex-col">
           {operators.map((op) => (
             <button
@@ -133,15 +181,13 @@ function OperatorSelector({
   );
 }
 
-// Value input/selector based on field type
+// Value input component
 function ValueInput({
-  field,
   fieldDef,
   operator,
   value,
   onChange,
 }: {
-  field: string;
   fieldDef: FieldDefinition;
   operator: FilterOperator;
   value: string | string[] | number | number[] | null;
@@ -149,17 +195,14 @@ function ValueInput({
 }) {
   const [open, setOpen] = useState(false);
 
-  // Operators that don't need a value
   if (operator === "is_empty" || operator === "is_not_empty") {
     return null;
   }
 
-  // Multi-select for "is any of", "is none of", "includes all of", "includes any of"
   const isMultiSelect = ["is_any_of", "is_none_of", "includes_all_of", "includes_any_of"].includes(operator);
 
-  // Enum or multi-value fields with predefined values
   if (fieldDef.values && fieldDef.values.length > 0) {
-    const currentValues = Array.isArray(value) ? value : value ? [String(value)] : [];
+    const currentValues = Array.isArray(value) ? value.map(String) : value ? [String(value)] : [];
     const displayValue = currentValues.length > 0 
       ? currentValues.length === 1 
         ? String(currentValues[0]) 
@@ -171,15 +214,15 @@ function ValueInput({
         <PopoverTrigger asChild>
           <button
             className={cn(
-              "flex items-center gap-1 px-2 py-1 text-xs font-medium text-foreground",
-              "hover:bg-secondary transition-colors min-w-[60px]"
+              "flex items-center gap-1 px-2 py-1.5 text-xs font-medium rounded-md border border-border",
+              "bg-card hover:bg-secondary transition-colors min-w-[80px]"
             )}
           >
             <span className="truncate">{displayValue}</span>
             <ChevronDown className="w-3 h-3 shrink-0 text-muted-foreground" />
           </button>
         </PopoverTrigger>
-        <PopoverContent className="w-44 p-1" align="start" sideOffset={4}>
+        <PopoverContent className="w-48 p-1" align="start" sideOffset={4}>
           <div className="flex flex-col max-h-48 overflow-y-auto">
             {fieldDef.values.map((v) => {
               const isSelected = isMultiSelect 
@@ -228,17 +271,16 @@ function ValueInput({
     );
   }
 
-  // Numeric input
   if (fieldDef.type === "numeric") {
     if (operator === "is_between") {
       const rangeValues = Array.isArray(value) ? value.map(Number) : [0, 100];
       return (
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1">
           <Input
             type="number"
             value={rangeValues[0] || ""}
             onChange={(e) => onChange([parseInt(e.target.value) || 0, rangeValues[1] || 100])}
-            className="w-14 h-6 text-xs px-1.5 py-0"
+            className="w-16 h-7 text-xs"
             placeholder="Min"
           />
           <span className="text-xs text-muted-foreground">-</span>
@@ -246,7 +288,7 @@ function ValueInput({
             type="number"
             value={rangeValues[1] || ""}
             onChange={(e) => onChange([rangeValues[0] || 0, parseInt(e.target.value) || 100])}
-            className="w-14 h-6 text-xs px-1.5 py-0"
+            className="w-16 h-7 text-xs"
             placeholder="Max"
           />
         </div>
@@ -257,22 +299,21 @@ function ValueInput({
         type="number"
         value={typeof value === "number" ? value : ""}
         onChange={(e) => onChange(parseInt(e.target.value) || null)}
-        className="w-16 h-6 text-xs px-1.5 py-0 border-0 focus-visible:ring-0"
+        className="w-20 h-7 text-xs"
         placeholder="Value"
       />
     );
   }
 
-  // Date input
   if (fieldDef.type === "date") {
     if (operator === "is_in_last_n_days") {
       return (
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1">
           <Input
             type="number"
             value={typeof value === "number" ? value : ""}
             onChange={(e) => onChange(parseInt(e.target.value) || null)}
-            className="w-14 h-6 text-xs px-1.5 py-0"
+            className="w-16 h-7 text-xs"
             placeholder="N"
           />
           <span className="text-xs text-muted-foreground">days</span>
@@ -284,32 +325,33 @@ function ValueInput({
         type="date"
         value={typeof value === "string" ? value : ""}
         onChange={(e) => onChange(e.target.value || null)}
-        className="w-28 h-6 text-xs px-1.5 py-0 border-0 focus-visible:ring-0"
+        className="w-32 h-7 text-xs"
       />
     );
   }
 
-  // Text input (default)
   return (
     <Input
       type="text"
       value={typeof value === "string" ? value : ""}
       onChange={(e) => onChange(e.target.value || null)}
-      className="w-24 h-6 text-xs px-1.5 py-0 border-0 focus-visible:ring-0"
+      className="w-28 h-7 text-xs"
       placeholder="Value"
     />
   );
 }
 
-// Single filter row
-function FilterRow({
+// Condition row
+function ConditionRow({
   condition,
   onUpdate,
   onRemove,
+  showRemove,
 }: {
   condition: FilterCondition;
   onUpdate: (updates: Partial<FilterCondition>) => void;
   onRemove: () => void;
+  showRemove: boolean;
 }) {
   const fieldDef = FILTER_FIELDS[condition.field];
 
@@ -324,7 +366,6 @@ function FilterRow({
   };
 
   const handleOperatorChange = (newOperator: FilterOperator) => {
-    // Reset value if switching to/from operators that don't need values
     const needsValue = !["is_empty", "is_not_empty"].includes(newOperator);
     const hadValue = !["is_empty", "is_not_empty"].includes(condition.operator);
     
@@ -336,7 +377,7 @@ function FilterRow({
   };
 
   return (
-    <div className="flex items-center rounded-md border border-border bg-card text-xs h-7 overflow-hidden">
+    <div className="flex items-center gap-2">
       <FieldSelector value={condition.field} onChange={handleFieldChange} />
       <OperatorSelector
         fieldType={fieldDef?.type || "text"}
@@ -344,108 +385,238 @@ function FilterRow({
         onChange={handleOperatorChange}
       />
       <ValueInput
-        field={condition.field}
         fieldDef={fieldDef || { label: condition.field, type: "text" }}
         operator={condition.operator}
         value={condition.value}
         onChange={(value) => onUpdate({ value })}
       />
-      <button
-        onClick={onRemove}
-        className="px-1.5 h-full flex items-center border-l border-border text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
-        aria-label="Remove filter"
-      >
-        <X className="w-3 h-3" />
-      </button>
-    </div>
-  );
-}
-
-export function SimpleFilterBar({
-  filters = [],
-  onFiltersChange,
-  onAdvancedClick,
-  showAdvancedLink = true,
-}: SimpleFilterBarProps) {
-  const handleAddFilter = () => {
-    const newCondition: FilterCondition = {
-      id: generateId(),
-      field: Object.keys(FILTER_FIELDS)[0],
-      operator: getDefaultOperator(FILTER_FIELDS[Object.keys(FILTER_FIELDS)[0]].type),
-      value: null,
-    };
-    onFiltersChange([...(filters || []), newCondition]);
-  };
-
-  const handleUpdateFilter = (id: string, updates: Partial<FilterCondition>) => {
-    onFiltersChange(
-      filters.map((f) => (f.id === id ? { ...f, ...updates } : f))
-    );
-  };
-
-  const handleRemoveFilter = (id: string) => {
-    onFiltersChange(filters.filter((f) => f.id !== id));
-  };
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {filters.map((condition) => (
-        <FilterRow
-          key={condition.id}
-          condition={condition}
-          onUpdate={(updates) => handleUpdateFilter(condition.id, updates)}
-          onRemove={() => handleRemoveFilter(condition.id)}
-        />
-      ))}
-      
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={handleAddFilter}
-        className="h-7 px-2.5 text-xs border-dashed"
-      >
-        + Add filter
-      </Button>
-      
-      {showAdvancedLink && (
+      {showRemove && (
         <button
-          onClick={onAdvancedClick}
-          className="text-xs text-muted-foreground hover:text-foreground transition-colors ml-1"
+          onClick={onRemove}
+          className="p-1 text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="Remove condition"
         >
-          Advanced filter ›
+          <X className="w-3.5 h-3.5" />
         </button>
       )}
     </div>
   );
 }
 
-// Query display component for when advanced filter is active
-interface QueryDisplayProps {
-  summary: string;
-  onEdit: () => void;
-  onClear: () => void;
-}
+// Filter group component
+function FilterGroupComponent({
+  group,
+  onUpdate,
+  onRemove,
+  showRemove,
+}: {
+  group: FilterGroup;
+  onUpdate: (updates: Partial<FilterGroup>) => void;
+  onRemove: () => void;
+  showRemove: boolean;
+}) {
+  const handleAddCondition = () => {
+    const newCondition: FilterCondition = {
+      id: generateId(),
+      field: Object.keys(FILTER_FIELDS)[0],
+      operator: getDefaultOperator(FILTER_FIELDS[Object.keys(FILTER_FIELDS)[0]].type),
+      value: null,
+    };
+    onUpdate({ conditions: [...group.conditions, newCondition] });
+  };
 
-export function QueryDisplay({ summary, onEdit, onClear }: QueryDisplayProps) {
+  const handleUpdateCondition = (id: string, updates: Partial<FilterCondition>) => {
+    onUpdate({
+      conditions: group.conditions.map((c) =>
+        c.id === id ? { ...c, ...updates } : c
+      ),
+    });
+  };
+
+  const handleRemoveCondition = (id: string) => {
+    const newConditions = group.conditions.filter((c) => c.id !== id);
+    if (newConditions.length === 0) {
+      onRemove();
+    } else {
+      onUpdate({ conditions: newConditions });
+    }
+  };
+
   return (
-    <div className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-border bg-card text-xs">
+    <div className="p-3 rounded-lg border border-border bg-secondary/30">
+      <div className="flex items-center justify-between mb-3">
+        <CombinatorToggle
+          value={group.combinator}
+          onChange={(combinator) => onUpdate({ combinator })}
+          size="small"
+        />
+        {showRemove && (
+          <button
+            onClick={onRemove}
+            className="flex items-center gap-1 text-xs text-muted-foreground hover:text-destructive transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+            Remove group
+          </button>
+        )}
+      </div>
+      
+      <div className="flex flex-col gap-2">
+        {group.conditions.map((condition, index) => (
+          <div key={condition.id} className="flex items-center gap-2">
+            {index > 0 && (
+              <span className="text-[10px] font-semibold uppercase text-muted-foreground w-8 text-center">
+                {group.combinator}
+              </span>
+            )}
+            {index === 0 && <span className="w-8" />}
+            <ConditionRow
+              condition={condition}
+              onUpdate={(updates) => handleUpdateCondition(condition.id, updates)}
+              onRemove={() => handleRemoveCondition(condition.id)}
+              showRemove={group.conditions.length > 1}
+            />
+          </div>
+        ))}
+      </div>
+      
       <button
-        onClick={onEdit}
-        className="flex items-center gap-1.5 text-foreground hover:text-primary transition-colors min-w-0"
+        onClick={handleAddCondition}
+        className="mt-2 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
       >
-        <span className="font-medium text-muted-foreground shrink-0">Query:</span>
-        <span className="truncate">{summary}</span>
-      </button>
-      <button
-        onClick={onClear}
-        className="shrink-0 p-0.5 text-muted-foreground hover:text-foreground transition-colors"
-        aria-label="Clear query"
-      >
-        <X className="w-3 h-3" />
+        <Plus className="w-3 h-3" />
+        Add condition
       </button>
     </div>
   );
 }
 
-// Legacy export for backwards compatibility
-export { SimpleFilterBar as FilterPills };
+export function AdvancedFilterPopover({
+  open,
+  onOpenChange,
+  query,
+  onApply,
+  onCancel,
+  trigger,
+}: AdvancedFilterPopoverProps) {
+  const [localQuery, setLocalQuery] = useState<AdvancedFilterQuery>(query);
+
+  // Sync local state when query prop changes
+  useEffect(() => {
+    if (open) {
+      setLocalQuery(query);
+    }
+  }, [open, query]);
+
+  const handleAddGroup = () => {
+    setLocalQuery({
+      ...localQuery,
+      groups: [...localQuery.groups, createEmptyGroup()],
+    });
+  };
+
+  const handleUpdateGroup = (id: string, updates: Partial<FilterGroup>) => {
+    setLocalQuery({
+      ...localQuery,
+      groups: localQuery.groups.map((g) =>
+        g.id === id ? { ...g, ...updates } : g
+      ),
+    });
+  };
+
+  const handleRemoveGroup = (id: string) => {
+    const newGroups = localQuery.groups.filter((g) => g.id !== id);
+    if (newGroups.length === 0) {
+      setLocalQuery({
+        ...localQuery,
+        groups: [createEmptyGroup()],
+      });
+    } else {
+      setLocalQuery({
+        ...localQuery,
+        groups: newGroups,
+      });
+    }
+  };
+
+  const handleApply = () => {
+    onApply(localQuery);
+    onOpenChange(false);
+  };
+
+  const handleCancel = () => {
+    onCancel();
+    onOpenChange(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={(isOpen) => {
+      if (!isOpen) {
+        handleCancel();
+      } else {
+        onOpenChange(true);
+      }
+    }}>
+      {trigger && <PopoverTrigger asChild>{trigger}</PopoverTrigger>}
+      <PopoverContent 
+        className="w-[520px] p-0" 
+        align="start" 
+        sideOffset={8}
+        onInteractOutside={(e) => {
+          // Prevent closing when clicking inside nested popovers
+          const target = e.target as HTMLElement;
+          if (target.closest('[data-radix-popper-content-wrapper]')) {
+            e.preventDefault();
+          }
+        }}
+      >
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-foreground">Advanced Filter</h3>
+            <CombinatorToggle
+              value={localQuery.rootCombinator}
+              onChange={(rootCombinator) => setLocalQuery({ ...localQuery, rootCombinator })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto">
+            {localQuery.groups.map((group, index) => (
+              <div key={group.id}>
+                {index > 0 && (
+                  <div className="flex items-center justify-center my-2">
+                    <span className="text-xs font-semibold uppercase text-muted-foreground px-2 py-0.5 rounded bg-secondary">
+                      {localQuery.rootCombinator}
+                    </span>
+                  </div>
+                )}
+                <FilterGroupComponent
+                  group={group}
+                  onUpdate={(updates) => handleUpdateGroup(group.id, updates)}
+                  onRemove={() => handleRemoveGroup(group.id)}
+                  showRemove={localQuery.groups.length > 1}
+                />
+              </div>
+            ))}
+          </div>
+
+          <button
+            onClick={handleAddGroup}
+            className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <Plus className="w-3.5 h-3.5" />
+            Add group
+          </button>
+        </div>
+
+        <div className="flex items-center justify-end gap-2 p-3 border-t border-border bg-secondary/30">
+          <Button variant="ghost" size="sm" onClick={handleCancel}>
+            Cancel
+          </Button>
+          <Button size="sm" onClick={handleApply}>
+            Apply
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}

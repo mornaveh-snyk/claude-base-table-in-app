@@ -12,7 +12,7 @@ import {
   Cpu,
   MoreHorizontal,
 } from "lucide-react";
-import { cn, applyFilters, type FilterGroup } from "@/lib/utils";
+import { cn, applyFilters, type FilterState, createInitialFilterState } from "@/lib/utils";
 
 type SortDir = "asc" | "desc" | null;
 type SortKey = "name" | "type" | "risk" | "lastSeen";
@@ -33,16 +33,16 @@ const typeIcons: Record<string, React.ReactNode> = {
 };
 
 const ASSETS = [
-  { id: 1, name: "api-gateway-service",   type: "Repository",        risk: "critical", lastSeen: "2 min ago",   owner: "platform-team" },
-  { id: 2, name: "auth-service:latest",   type: "Container Image",   risk: "high",     lastSeen: "11 min ago",  owner: "security-team" },
-  { id: 3, name: "lodash@4.17.19",        type: "Package",           risk: "high",     lastSeen: "1 hr ago",    owner: "frontend-team" },
-  { id: 4, name: "payments-api",          type: "API",               risk: "critical", lastSeen: "5 min ago",   owner: "billing-team" },
-  { id: 5, name: "data-pipeline",         type: "Service",           risk: "medium",   lastSeen: "32 min ago",  owner: "data-team" },
-  { id: 6, name: "user-profiles-service", type: "Repository",        risk: "low",      lastSeen: "3 hr ago",    owner: "backend-team" },
-  { id: 7, name: "nginx:1.23-alpine",     type: "Container Image",   risk: "medium",   lastSeen: "6 hr ago",    owner: "infra-team" },
-  { id: 8, name: "react@18.2.0",          type: "Package",           risk: "low",      lastSeen: "2 days ago",  owner: "frontend-team" },
-  { id: 9, name: "inventory-api",         type: "API",               risk: "medium",   lastSeen: "45 min ago",  owner: "product-team" },
-  { id: 10, name: "ml-model-service",     type: "Service",           risk: "low",      lastSeen: "12 hr ago",   owner: "ml-team" },
+  { id: 1, name: "api-gateway-service", asset_name: "api-gateway-service", type: "Repository", risk: "critical", risk_score: 95, lastSeen: "2 min ago", owner: "platform-team", team: "Platform", environment: "Production", class: "A", activity_status: "Active", visibility: "Private", coverage: ["SAST", "SCA"], source: ["GitHub"], critical_issues: 3, high_issues: 5, medium_issues: 12, low_issues: 24, last_scan: "2024-01-20", first_seen: "2023-06-15" },
+  { id: 2, name: "auth-service:latest", asset_name: "auth-service:latest", type: "Container Image", risk: "high", risk_score: 82, lastSeen: "11 min ago", owner: "security-team", team: "Security", environment: "Production", class: "A", activity_status: "Active", visibility: "Private", coverage: ["Container", "SAST"], source: ["GitHub", "AWS"], critical_issues: 1, high_issues: 8, medium_issues: 15, low_issues: 30, last_scan: "2024-01-19", first_seen: "2023-08-22" },
+  { id: 3, name: "lodash@4.17.19", asset_name: "lodash@4.17.19", type: "Package", risk: "high", risk_score: 78, lastSeen: "1 hr ago", owner: "frontend-team", team: "Frontend", environment: "Production", class: "B", activity_status: "Active", visibility: "Public", coverage: ["SCA"], source: ["GitHub"], critical_issues: 0, high_issues: 4, medium_issues: 8, low_issues: 16, last_scan: "2024-01-18", first_seen: "2023-03-10" },
+  { id: 4, name: "payments-api", asset_name: "payments-api", type: "API", risk: "critical", risk_score: 92, lastSeen: "5 min ago", owner: "billing-team", team: "Billing", environment: "Production", class: "A", activity_status: "Active", visibility: "Internal", coverage: ["DAST", "SAST"], source: ["Manual"], critical_issues: 5, high_issues: 12, medium_issues: 20, low_issues: 35, last_scan: "2024-01-20", first_seen: "2023-01-05" },
+  { id: 5, name: "data-pipeline", asset_name: "data-pipeline", type: "Service", risk: "medium", risk_score: 55, lastSeen: "32 min ago", owner: "data-team", team: "Data", environment: "Staging", class: "B", activity_status: "Active", visibility: "Private", coverage: ["IaC", "Secrets"], source: ["GitLab"], critical_issues: 0, high_issues: 2, medium_issues: 10, low_issues: 18, last_scan: "2024-01-17", first_seen: "2023-09-01" },
+  { id: 6, name: "user-profiles-service", asset_name: "user-profiles-service", type: "Repository", risk: "low", risk_score: 25, lastSeen: "3 hr ago", owner: "backend-team", team: "Backend", environment: "Development", class: "C", activity_status: "Active", visibility: "Private", coverage: ["SAST", "SCA", "Secrets"], source: ["GitHub"], critical_issues: 0, high_issues: 0, medium_issues: 3, low_issues: 12, last_scan: "2024-01-15", first_seen: "2023-05-20" },
+  { id: 7, name: "nginx:1.23-alpine", asset_name: "nginx:1.23-alpine", type: "Container Image", risk: "medium", risk_score: 48, lastSeen: "6 hr ago", owner: "infra-team", team: "Infra", environment: "Production", class: "B", activity_status: "Active", visibility: "Public", coverage: ["Container"], source: ["AWS"], critical_issues: 0, high_issues: 1, medium_issues: 5, low_issues: 10, last_scan: "2024-01-14", first_seen: "2023-07-12" },
+  { id: 8, name: "react@18.2.0", asset_name: "react@18.2.0", type: "Package", risk: "low", risk_score: 15, lastSeen: "2 days ago", owner: "frontend-team", team: "Frontend", environment: "Production", class: "C", activity_status: "Active", visibility: "Public", coverage: ["SCA"], source: ["GitHub"], critical_issues: 0, high_issues: 0, medium_issues: 1, low_issues: 5, last_scan: "2024-01-10", first_seen: "2023-02-28" },
+  { id: 9, name: "inventory-api", asset_name: "inventory-api", type: "API", risk: "medium", risk_score: 62, lastSeen: "45 min ago", owner: "product-team", team: "Product", environment: "Staging", class: "B", activity_status: "Active", visibility: "Internal", coverage: ["DAST"], source: ["Manual", "Azure DevOps"], critical_issues: 0, high_issues: 3, medium_issues: 8, low_issues: 14, last_scan: "2024-01-16", first_seen: "2023-11-05" },
+  { id: 10, name: "ml-model-service", asset_name: "ml-model-service", type: "Service", risk: "low", risk_score: 22, lastSeen: "12 hr ago", owner: "ml-team", team: "ML", environment: "Testing", class: "C", activity_status: "Inactive", visibility: "Private", coverage: ["SAST", "IaC"], source: ["GCP"], critical_issues: 0, high_issues: 0, medium_issues: 2, low_issues: 8, last_scan: "2024-01-12", first_seen: "2023-10-18" },
 ];
 
 function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: SortKey; sortDir: SortDir }) {
@@ -52,11 +52,11 @@ function SortIcon({ column, sortKey, sortDir }: { column: SortKey; sortKey: Sort
 }
 
 interface AssetTableProps {
-  filterGroup?: FilterGroup;
+  filterState?: FilterState;
   search?: string;
 }
 
-export function AssetTable({ filterGroup, search }: AssetTableProps) {
+export function AssetTable({ filterState = createInitialFilterState(), search }: AssetTableProps) {
   const [sortKey, setSortKey] = useState<SortKey>("risk");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selected, setSelected] = useState<Set<number>>(new Set());
@@ -74,10 +74,8 @@ export function AssetTable({ filterGroup, search }: AssetTableProps) {
   const filteredAssets = useMemo(() => {
     let result = ASSETS;
 
-    // Apply AI filters
-    if (filterGroup && filterGroup.items.length > 0) {
-      result = applyFilters(result, filterGroup);
-    }
+    // Apply filters using the new filter state
+    result = applyFilters(result, filterState);
 
     // Apply text search
     if (search && search.trim()) {
@@ -86,12 +84,13 @@ export function AssetTable({ filterGroup, search }: AssetTableProps) {
         (asset) =>
           asset.name.toLowerCase().includes(searchLower) ||
           asset.type.toLowerCase().includes(searchLower) ||
-          asset.owner.toLowerCase().includes(searchLower)
+          asset.owner.toLowerCase().includes(searchLower) ||
+          asset.team.toLowerCase().includes(searchLower)
       );
     }
 
     return result;
-  }, [filterGroup, search]);
+  }, [filterState, search]);
 
   const riskOrder = { critical: 0, high: 1, medium: 2, low: 3 };
   const sorted = [...filteredAssets].sort((a, b) => {
@@ -152,55 +151,63 @@ export function AssetTable({ filterGroup, search }: AssetTableProps) {
           </tr>
         </thead>
         <tbody>
-          {sorted.map((asset, idx) => {
-            const isSelected = selected.has(asset.id);
-            const risk = riskConfig[asset.risk];
-            return (
-              <tr
-                key={asset.id}
-                className={cn(
-                  "border-b border-border last:border-b-0 transition-colors hover:bg-secondary/50",
-                  isSelected && "bg-primary/5"
-                )}
-              >
-                <td className="pl-4 pr-2 py-3">
-                  <input
-                    type="checkbox"
-                    aria-label={`Select ${asset.name}`}
-                    checked={isSelected}
-                    onChange={() => toggleRow(asset.id)}
-                    className="rounded border-muted text-primary focus:ring-primary/30 cursor-pointer"
-                  />
-                </td>
-                <td className="py-3 pr-4">
-                  <div className="flex flex-col">
-                    <span className="font-medium text-foreground">{asset.name}</span>
-                    <span className="text-xs text-muted-foreground">{asset.owner}</span>
-                  </div>
-                </td>
-                <td className="py-3 pr-4">
-                  <div className="flex items-center gap-1.5 text-muted-foreground">
-                    {typeIcons[asset.type]}
-                    <span>{asset.type}</span>
-                  </div>
-                </td>
-                <td className="py-3 pr-4">
-                  <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold", risk.className)}>
-                    {risk.label}
-                  </span>
-                </td>
-                <td className="py-3 pr-4 text-muted-foreground">{asset.lastSeen}</td>
-                <td className="py-3 pr-4">
-                  <button
-                    aria-label={`More options for ${asset.name}`}
-                    className="p-1 rounded hover:bg-accent text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
-                  >
-                    <MoreHorizontal className="w-4 h-4" />
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
+          {sorted.length === 0 ? (
+            <tr>
+              <td colSpan={6} className="text-center py-12 text-muted-foreground">
+                No assets match the current filters
+              </td>
+            </tr>
+          ) : (
+            sorted.map((asset, idx) => {
+              const isSelected = selected.has(asset.id);
+              const risk = riskConfig[asset.risk];
+              return (
+                <tr
+                  key={asset.id}
+                  className={cn(
+                    "border-b border-border last:border-b-0 transition-colors hover:bg-secondary/50 group",
+                    isSelected && "bg-primary/5"
+                  )}
+                >
+                  <td className="pl-4 pr-2 py-3">
+                    <input
+                      type="checkbox"
+                      aria-label={`Select ${asset.name}`}
+                      checked={isSelected}
+                      onChange={() => toggleRow(asset.id)}
+                      className="rounded border-muted text-primary focus:ring-primary/30 cursor-pointer"
+                    />
+                  </td>
+                  <td className="py-3 pr-4">
+                    <div className="flex flex-col">
+                      <span className="font-medium text-foreground">{asset.name}</span>
+                      <span className="text-xs text-muted-foreground">{asset.owner}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <div className="flex items-center gap-1.5 text-muted-foreground">
+                      {typeIcons[asset.type]}
+                      <span>{asset.type}</span>
+                    </div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <span className={cn("inline-flex items-center px-2 py-0.5 rounded border text-xs font-semibold", risk.className)}>
+                      {risk.label}
+                    </span>
+                  </td>
+                  <td className="py-3 pr-4 text-muted-foreground">{asset.lastSeen}</td>
+                  <td className="py-3 pr-4">
+                    <button
+                      aria-label={`More options for ${asset.name}`}
+                      className="p-1 rounded hover:bg-accent text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <MoreHorizontal className="w-4 h-4" />
+                    </button>
+                  </td>
+                </tr>
+              );
+            })
+          )}
         </tbody>
       </table>
 

@@ -9,6 +9,11 @@ import {
   User,
   Clock,
   Plus,
+  Hash,
+  Globe,
+  Shield,
+  GitBranch,
+  Calendar,
 } from "lucide-react";
 import {
   Popover,
@@ -18,60 +23,57 @@ import {
 import {
   parseNaturalLanguageFilter,
   FILTER_FIELDS,
-  type FilterGroup,
+  getDefaultOperator,
+  generateId,
+  type FilterCondition,
+  type AdvancedFilterQuery,
 } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 
-const FIELD_META: Record<
-  string,
-  { label: string; icon: React.ReactNode }
-> = {
-  status: {
-    label: "Status",
-    icon: <Activity className="w-4 h-4" />,
-  },
-  risk: {
-    label: "Risk",
-    icon: <ShieldAlert className="w-4 h-4" />,
-  },
-  type: {
-    label: "Type",
-    icon: <Layers className="w-4 h-4" />,
-  },
-  owner: {
-    label: "Owner",
-    icon: <User className="w-4 h-4" />,
-  },
-  lastSeen: {
-    label: "Last Seen",
-    icon: <Clock className="w-4 h-4" />,
-  },
+const FIELD_META: Record<string, { label: string; icon: React.ReactNode }> = {
+  asset_name: { label: "Asset name", icon: <Layers className="w-4 h-4" /> },
+  class: { label: "Class", icon: <Shield className="w-4 h-4" /> },
+  type: { label: "Type", icon: <Layers className="w-4 h-4" /> },
+  environment: { label: "Environment", icon: <Globe className="w-4 h-4" /> },
+  team: { label: "Team", icon: <User className="w-4 h-4" /> },
+  risk_score: { label: "Risk score", icon: <ShieldAlert className="w-4 h-4" /> },
+  critical_issues: { label: "Critical issues", icon: <ShieldAlert className="w-4 h-4" /> },
+  high_issues: { label: "High issues", icon: <ShieldAlert className="w-4 h-4" /> },
+  medium_issues: { label: "Medium issues", icon: <ShieldAlert className="w-4 h-4" /> },
+  low_issues: { label: "Low issues", icon: <ShieldAlert className="w-4 h-4" /> },
+  coverage: { label: "Coverage", icon: <Shield className="w-4 h-4" /> },
+  source: { label: "Source", icon: <GitBranch className="w-4 h-4" /> },
+  visibility: { label: "Visibility", icon: <Globe className="w-4 h-4" /> },
+  activity_status: { label: "Activity status", icon: <Activity className="w-4 h-4" /> },
+  last_scan: { label: "Last scan", icon: <Calendar className="w-4 h-4" /> },
+  first_seen: { label: "First seen", icon: <Clock className="w-4 h-4" /> },
 };
 
-const FIELD_KEYS = Object.keys(FIELD_META);
+const FIELD_KEYS = Object.keys(FILTER_FIELDS);
 
 // A "sentence" has at least one space — treat as natural language
 function isNaturalLanguage(input: string): boolean {
   return input.trim().includes(" ");
 }
 
-// Returns {field, value} matches for a single token query
-function getTokenMatches(token: string): Array<{ field: string; value: string; fieldLabel: string }> {
+// Returns field matches for a single token query
+function getTokenMatches(token: string): Array<{ field: string; value?: string; fieldLabel: string }> {
   if (!token) return [];
   const q = token.toLowerCase();
-  const results: Array<{ field: string; value: string; fieldLabel: string }> = [];
+  const results: Array<{ field: string; value?: string; fieldLabel: string }> = [];
 
   for (const [fieldKey, fieldDef] of Object.entries(FILTER_FIELDS)) {
     // Match field label itself
     if (fieldDef.label.toLowerCase().includes(q)) {
-      // Show first value as a representative entry
-      results.push({ field: fieldKey, value: fieldDef.values[0], fieldLabel: fieldDef.label });
+      results.push({ field: fieldKey, fieldLabel: fieldDef.label });
       continue;
     }
     // Match any individual value
-    for (const v of fieldDef.values) {
-      if (v.toLowerCase().includes(q)) {
-        results.push({ field: fieldKey, value: v, fieldLabel: fieldDef.label });
+    if (fieldDef.values) {
+      for (const v of fieldDef.values) {
+        if (v.toLowerCase().includes(q)) {
+          results.push({ field: fieldKey, value: v, fieldLabel: fieldDef.label });
+        }
       }
     }
   }
@@ -79,11 +81,12 @@ function getTokenMatches(token: string): Array<{ field: string; value: string; f
   return results;
 }
 
-interface AIFilterDropdownProps {
-  onApplyFilters: (filterGroup: FilterGroup) => void;
+interface AIFilterCommandProps {
+  onAddSimpleFilter: (condition: FilterCondition) => void;
+  onApplyAdvancedQuery: (query: AdvancedFilterQuery) => void;
 }
 
-export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
+export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIFilterCommandProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -100,11 +103,15 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
     isNL
       ? []
       : !input.trim()
-      ? FIELD_KEYS.map((key) => ({ key, label: FIELD_META[key].label, icon: FIELD_META[key].icon }))
+      ? FIELD_KEYS.map((key) => ({ 
+          key, 
+          label: FIELD_META[key]?.label || FILTER_FIELDS[key].label, 
+          icon: FIELD_META[key]?.icon || <Layers className="w-4 h-4" /> 
+        }))
       : tokenMatches.map(({ field, value, fieldLabel }) => ({
           key: field,
           label: fieldLabel,
-          icon: FIELD_META[field]?.icon,
+          icon: FIELD_META[field]?.icon || <Layers className="w-4 h-4" />,
           value,
         }));
 
@@ -124,27 +131,36 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
   const applyAIFilter = useCallback(
     (query: string) => {
       const parsed = parseNaturalLanguageFilter(query);
-      if (parsed.items.length > 0 && parsed.items.some(item => item.filters.length > 0)) {
-        onApplyFilters(parsed);
+      
+      if (parsed.isComplex && parsed.advanced) {
+        // Complex query - apply as advanced filter
+        onApplyAdvancedQuery(parsed.advanced);
+        setOpen(false);
+      } else if (parsed.simple) {
+        // Simple single condition
+        onAddSimpleFilter(parsed.simple);
         setOpen(false);
       }
     },
-    [onApplyFilters]
+    [onAddSimpleFilter, onApplyAdvancedQuery]
   );
 
   const applyFieldFilter = useCallback(
     (fieldKey: string, value?: string) => {
-      // Build a single-filter group for the selected field with the given value (or first value)
-      const field = FILTER_FIELDS[fieldKey as keyof typeof FILTER_FIELDS];
-      if (!field) return;
-      const targetValue = value ?? field.values[0];
-      const parsed = parseNaturalLanguageFilter(`${fieldKey} ${targetValue}`);
-      if (parsed.items.length > 0 && parsed.items.some(item => item.filters.length > 0)) {
-        onApplyFilters(parsed);
-        setOpen(false);
-      }
+      const fieldDef = FILTER_FIELDS[fieldKey];
+      if (!fieldDef) return;
+      
+      const condition: FilterCondition = {
+        id: generateId(),
+        field: fieldKey,
+        operator: getDefaultOperator(fieldDef.type),
+        value: value || (fieldDef.values ? fieldDef.values[0] : null),
+      };
+      
+      onAddSimpleFilter(condition);
+      setOpen(false);
     },
-    [onApplyFilters]
+    [onAddSimpleFilter]
   );
 
   const handleKeyDown = useCallback(
@@ -158,7 +174,7 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
       } else if (e.key === "Enter") {
         e.preventDefault();
         if (highlightedIndex === 0) {
-          // AI filter row — only fires when there's a natural language query
+          // AI filter row — only fires when there's input
           if (input.trim()) applyAIFilter(input.trim());
         } else {
           // Field / value row
@@ -169,7 +185,7 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
         setOpen(false);
       }
     },
-    [highlightedIndex, input, totalItems, applyAIFilter, applyFieldFilter]
+    [highlightedIndex, input, totalItems, applyAIFilter, applyFieldFilter, visibleFieldRows]
   );
 
   return (
@@ -203,14 +219,14 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
               setHighlightedIndex(0);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Filter..."
+            placeholder="Filter or describe what you want..."
             className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
 
         {/* List */}
         <div className="py-1 max-h-72 overflow-y-auto">
-          {/* AI Filter row — always first; only actionable when input is natural language */}
+          {/* AI Filter row — always first; only actionable when input exists */}
           <button
             onMouseEnter={() => setHighlightedIndex(0)}
             onClick={() => {
@@ -241,7 +257,7 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
             <div className="my-1 border-t border-border" />
           )}
 
-          {/* Field / value rows — filtered when single-token, full list for NL */}
+          {/* Field / value rows — filtered when single-token, full list when no input */}
           {visibleFieldRows.length === 0 && input.trim() && !isNL ? (
             <p className="px-3 py-4 text-xs text-muted-foreground text-center">
               No matching filters. Press Enter to use AI Filter.
@@ -266,9 +282,9 @@ export function AIFilterCommand({ onApplyFilters }: AIFilterDropdownProps) {
                   </span>
                   <span className="text-sm text-foreground">
                     {row.label}
-                    {row.value && !isNL && (
+                    {row.value && (
                       <span className="ml-1.5 text-muted-foreground font-normal">
-                        = {row.value.charAt(0).toUpperCase() + row.value.slice(1)}
+                        = {row.value}
                       </span>
                     )}
                   </span>
