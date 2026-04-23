@@ -374,14 +374,28 @@ export function AssetManagementPage() {
           <AssetTable filterState={filterState} search={search} />
         </div>
 
-        {/* Advanced Filter Popover */}
-        <AdvancedFilterPopover
-          open={advancedPopoverOpen}
-          onOpenChange={setAdvancedPopoverOpen}
-          query={filterState.advanced || createEmptyAdvancedQuery()}
-          onApply={handleAdvancedApply}
-          onCancel={handleAdvancedCancel}
-        />
+        {/* Advanced Filter Popover - rendered as a controlled modal overlay */}
+        {advancedPopoverOpen && (
+          <>
+            {/* Backdrop */}
+            <div 
+              className="fixed inset-0 z-40 bg-background/50"
+              onClick={() => {
+                handleAdvancedCancel();
+              }}
+            />
+            {/* Popover content positioned near filters */}
+            <div className="fixed left-6 top-[180px] z-50">
+              <AdvancedFilterPopover
+                open={advancedPopoverOpen}
+                onOpenChange={setAdvancedPopoverOpen}
+                query={filterState.advanced || createEmptyAdvancedQuery()}
+                onApply={handleAdvancedApply}
+                onCancel={handleAdvancedCancel}
+              />
+            </div>
+          </>
+        )}
 
         {/* Save View Dialog */}
         <SaveViewDialog

@@ -549,6 +549,65 @@ export function AdvancedFilterPopover({
     onOpenChange(false);
   };
 
+  // Content for the popover
+  const popoverContent = (
+    <div className="w-[520px] rounded-lg border border-border bg-popover shadow-lg">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-foreground">Advanced Filter</h3>
+          <CombinatorToggle
+            value={localQuery.rootCombinator}
+            onChange={(rootCombinator) => setLocalQuery({ ...localQuery, rootCombinator })}
+          />
+        </div>
+
+        <div className="flex flex-col gap-3 max-h-[400px] overflow-y-auto">
+          {localQuery.groups.map((group, index) => (
+            <div key={group.id}>
+              {index > 0 && (
+                <div className="flex items-center justify-center my-2">
+                  <span className="text-xs font-semibold uppercase text-muted-foreground px-2 py-0.5 rounded bg-secondary">
+                    {localQuery.rootCombinator}
+                  </span>
+                </div>
+              )}
+              <FilterGroupComponent
+                group={group}
+                onUpdate={(updates) => handleUpdateGroup(group.id, updates)}
+                onRemove={() => handleRemoveGroup(group.id)}
+                showRemove={localQuery.groups.length > 1}
+              />
+            </div>
+          ))}
+        </div>
+
+        <button
+          onClick={handleAddGroup}
+          className="mt-3 flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Add group
+        </button>
+      </div>
+
+      <div className="flex items-center justify-end gap-2 p-3 border-t border-border bg-secondary/30 rounded-b-lg">
+        <Button variant="ghost" size="sm" onClick={handleCancel}>
+          Cancel
+        </Button>
+        <Button size="sm" onClick={handleApply}>
+          Apply
+        </Button>
+      </div>
+    </div>
+  );
+
+  // If no trigger provided, render content directly when open (controlled mode)
+  if (!trigger) {
+    if (!open) return null;
+    return popoverContent;
+  }
+
+  // With trigger, use Popover component
   return (
     <Popover open={open} onOpenChange={(isOpen) => {
       if (!isOpen) {
@@ -557,7 +616,7 @@ export function AdvancedFilterPopover({
         onOpenChange(true);
       }
     }}>
-      {trigger && <PopoverTrigger asChild>{trigger}</PopoverTrigger>}
+      <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent 
         className="w-[520px] p-0" 
         align="start" 
