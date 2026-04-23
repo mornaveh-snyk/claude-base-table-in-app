@@ -277,12 +277,10 @@ export function AssetManagementPage() {
             {/* Filter UI - depends on mode */}
             {filterState.mode === "simple" ? (
               <>
-                {/* Simple mode: show filter rows */}
+                {/* Simple mode: show filter rows (only when filters exist) */}
                 <SimpleFilterBar
                   filters={filterState.simple}
                   onFiltersChange={handleSimpleFiltersChange}
-                  onAdvancedClick={handleOpenAdvanced}
-                  showAdvancedLink={true}
                 />
               </>
             ) : (
@@ -308,10 +306,11 @@ export function AssetManagementPage() {
               </>
             )}
 
-            {/* AI Filter dropdown — always visible, next to filter controls */}
+            {/* Filter command — shows field selection, AI filter, and advanced filter option */}
             <AIFilterCommand 
               onAddSimpleFilter={handleAddSimpleFilter}
               onApplyAdvancedQuery={handleApplyAdvancedQuery}
+              onAdvancedClick={handleOpenAdvanced}
             />
 
             {/* Clear filters button - only in simple mode with filters */}

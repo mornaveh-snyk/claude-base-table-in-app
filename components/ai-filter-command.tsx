@@ -14,6 +14,7 @@ import {
   Shield,
   GitBranch,
   Calendar,
+  Sliders,
 } from "lucide-react";
 import {
   Popover,
@@ -84,9 +85,10 @@ function getTokenMatches(token: string): Array<{ field: string; value?: string; 
 interface AIFilterCommandProps {
   onAddSimpleFilter: (condition: FilterCondition) => void;
   onApplyAdvancedQuery: (query: AdvancedFilterQuery) => void;
+  onAdvancedClick: () => void;
 }
 
-export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIFilterCommandProps) {
+export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery, onAdvancedClick }: AIFilterCommandProps) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [highlightedIndex, setHighlightedIndex] = useState(0);
@@ -115,8 +117,9 @@ export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIF
           value,
         }));
 
-  // Total items: 1 AI row + N visible field rows
-  const totalItems = 1 + visibleFieldRows.length;
+  // Total items: 1 AI row + (1 Advanced row when no input) + N visible field rows
+  const showAdvancedRow = !input.trim();
+  const totalItems = 1 + (showAdvancedRow ? 1 : 0) + visibleFieldRows.length;
 
   // Reset on close
   useEffect(() => {
@@ -176,16 +179,21 @@ export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIF
         if (highlightedIndex === 0) {
           // AI filter row — only fires when there's input
           if (input.trim()) applyAIFilter(input.trim());
+        } else if (showAdvancedRow && highlightedIndex === 1) {
+          // Advanced filter row
+          onAdvancedClick();
+          setOpen(false);
         } else {
           // Field / value row
-          const row = visibleFieldRows[highlightedIndex - 1];
+          const fieldIndex = showAdvancedRow ? highlightedIndex - 2 : highlightedIndex - 1;
+          const row = visibleFieldRows[fieldIndex];
           if (row) applyFieldFilter(row.key, row.value);
         }
       } else if (e.key === "Escape") {
         setOpen(false);
       }
     },
-    [highlightedIndex, input, totalItems, applyAIFilter, applyFieldFilter, visibleFieldRows]
+    [highlightedIndex, input, totalItems, applyAIFilter, applyFieldFilter, visibleFieldRows, showAdvancedRow, onAdvancedClick]
   );
 
   return (
@@ -252,6 +260,28 @@ export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIF
             </span>
           </button>
 
+          {/* Advanced filter row — only show when no input */}
+          {!input.trim() && (
+            <button
+              onMouseEnter={() => setHighlightedIndex(1)}
+              onClick={() => {
+                onAdvancedClick();
+                setOpen(false);
+              }}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 text-left transition-colors",
+                highlightedIndex === 1 ? "bg-secondary" : "hover:bg-secondary/60"
+              )}
+            >
+              <span className="flex items-center justify-center w-5 h-5 text-muted-foreground shrink-0">
+                <Sliders className="w-4 h-4" />
+              </span>
+              <span className="text-sm text-muted-foreground">
+                Advanced filter...
+              </span>
+            </button>
+          )}
+
           {/* Divider — only when field rows are visible */}
           {(visibleFieldRows.length > 0 || (!isNL && input.trim())) && (
             <div className="my-1 border-t border-border" />
@@ -264,7 +294,9 @@ export function AIFilterCommand({ onAddSimpleFilter, onApplyAdvancedQuery }: AIF
             </p>
           ) : (
             visibleFieldRows.map((row, idx) => {
-              const rowIndex = idx + 1;
+              // When no input: AI=0, Advanced=1, fields start at 2
+              // When typing: AI=0, fields start at 1
+              const rowIndex = showAdvancedRow ? idx + 2 : idx + 1;
               return (
                 <button
                   key={`${row.key}-${row.value ?? idx}`}

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { X, ChevronDown, Check, Plus, Sliders } from "lucide-react";
+import { X, ChevronDown, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   FILTER_FIELDS,
@@ -18,7 +18,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Button } from "@/components/ui/button";
+
 import { Input } from "@/components/ui/input";
 
 interface SimpleFilterBarProps {
@@ -26,71 +26,6 @@ interface SimpleFilterBarProps {
   onFiltersChange: (filters: SimpleFilterState) => void;
   onAdvancedClick: () => void;
   showAdvancedLink?: boolean;
-}
-
-// Add filter popover - shows field selection with Advanced option
-function AddFilterPopover({
-  onAddFilter,
-  onAdvancedClick,
-}: {
-  onAddFilter: (field: string) => void;
-  onAdvancedClick: () => void;
-}) {
-  const [open, setOpen] = useState(false);
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          variant="outline"
-          size="sm"
-          className="h-7 px-2.5 text-xs border-dashed"
-        >
-          <Plus className="w-3 h-3 mr-1" />
-          Filter
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-52 p-1" align="start" sideOffset={4}>
-        <div className="flex flex-col">
-          <div className="px-2 py-1.5 text-[10px] font-semibold uppercase text-muted-foreground tracking-wider">
-            Filter by
-          </div>
-          <div className="flex flex-col max-h-64 overflow-y-auto">
-            {Object.entries(FILTER_FIELDS).map(([key, def]) => (
-              <button
-                key={key}
-                onClick={() => {
-                  onAddFilter(key);
-                  setOpen(false);
-                }}
-                className={cn(
-                  "flex items-center px-2.5 py-1.5 rounded text-xs text-left transition-colors",
-                  "text-foreground hover:bg-secondary"
-                )}
-              >
-                {def.label}
-              </button>
-            ))}
-          </div>
-          <div className="border-t border-border mt-1 pt-1">
-            <button
-              onClick={() => {
-                onAdvancedClick();
-                setOpen(false);
-              }}
-              className={cn(
-                "flex items-center gap-2 w-full px-2.5 py-1.5 rounded text-xs text-left transition-colors",
-                "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              )}
-            >
-              <Sliders className="w-3.5 h-3.5" />
-              Advanced filter...
-            </button>
-          </div>
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
 }
 
 // Field selector dropdown
@@ -429,20 +364,7 @@ function FilterRow({
 export function SimpleFilterBar({
   filters = [],
   onFiltersChange,
-  onAdvancedClick,
-  showAdvancedLink = true,
-}: SimpleFilterBarProps) {
-  const handleAddFilter = (field: string) => {
-    const fieldDef = FILTER_FIELDS[field];
-    const newCondition: FilterCondition = {
-      id: generateId(),
-      field: field,
-      operator: getDefaultOperator(fieldDef?.type || "text"),
-      value: null,
-    };
-    onFiltersChange([...(filters || []), newCondition]);
-  };
-
+}: Omit<SimpleFilterBarProps, 'onAdvancedClick' | 'showAdvancedLink'>) {
   const handleUpdateFilter = (id: string, updates: Partial<FilterCondition>) => {
     onFiltersChange(
       filters.map((f) => (f.id === id ? { ...f, ...updates } : f))
@@ -452,6 +374,9 @@ export function SimpleFilterBar({
   const handleRemoveFilter = (id: string) => {
     onFiltersChange(filters.filter((f) => f.id !== id));
   };
+
+  // Only render if there are filters
+  if (filters.length === 0) return null;
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -463,11 +388,6 @@ export function SimpleFilterBar({
           onRemove={() => handleRemoveFilter(condition.id)}
         />
       ))}
-      
-      <AddFilterPopover
-        onAddFilter={handleAddFilter}
-        onAdvancedClick={onAdvancedClick}
-      />
     </div>
   );
 }
