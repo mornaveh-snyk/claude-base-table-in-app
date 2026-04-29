@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, ChevronDown, LayoutGrid } from "lucide-react";
+import { ChevronDown, LayoutGrid } from "lucide-react";
 import { BillboardCards } from "@/components/billboard-cards";
 import { AssetTable } from "@/components/asset-table";
 import { SaveViewDialog } from "@/components/save-view-dialog";
@@ -122,50 +122,9 @@ export function AssetManagementPage() {
 
         {/* Content area */}
         <div className="flex flex-col gap-4 px-6 pt-6 pb-8 flex-1">
-          {/* Controls bar */}
-          <div className="flex items-center gap-2">
-            <div className="flex-1" />
-            <div className="relative w-48">
-              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <input
-                type="search"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  markAsModified();
-                }}
-                placeholder="Search..."
-                className="w-full pl-8 pr-3 py-1.5 text-sm rounded-md border border-border bg-card focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-          </div>
-
           {/* Billboards */}
           <BillboardCards />
 
-          {/* Table controls row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              Group by:
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <button className="font-medium text-foreground hover:text-primary transition-colors flex items-center gap-1">
-                    Asset class
-                    <ChevronDown className="w-3 h-3" />
-                  </button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem>Asset class</DropdownMenuItem>
-                  <DropdownMenuItem>Organization</DropdownMenuItem>
-                  <DropdownMenuItem>Deployment stage</DropdownMenuItem>
-                  <DropdownMenuItem>None</DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
-            <span className="text-sm text-muted-foreground tabular-nums">
-              1,842 assets
-            </span>
-          </div>
 
           {/* Data table — sticky so it never scrolls below the viewport */}
           <div

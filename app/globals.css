@@ -555,6 +555,8 @@
   outline: none;
   position: sticky;
   top: 40px;
+  left: 0;
+  width: var(--wrapper-width, 100%);
   z-index: 5;
 }
 

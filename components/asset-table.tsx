@@ -1280,11 +1280,7 @@ export function AssetTable({ search }: AssetTableProps) {
         groupsRef.current = updated;
         return updated;
       });
-      const group = groupsRef.current.find((g) => g.id === groupId);
-      if (group && !group.expanded && group.items.length === 0) {
-        // Load on first expand
-        setTimeout(() => loadGroupItems(groupId), 0);
-      }
+      // Loading is driven solely by GroupSentinel's IntersectionObserver
     },
     [loadGroupItems]
   );
@@ -1311,6 +1307,20 @@ export function AssetTable({ search }: AssetTableProps) {
      MAIN INTERSECTION OBSERVER
      ============================================================ */
 
+  const loadMoreFlatRef = useRef(loadMoreFlat);
+  useEffect(() => { loadMoreFlatRef.current = loadMoreFlat; }, [loadMoreFlat]);
+
+  /* Keep --wrapper-width in sync so group headers can clamp to the visible width */
+  useEffect(() => {
+    const el = scrollWrapperRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => {
+      el.style.setProperty("--wrapper-width", el.clientWidth + "px");
+    });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
   useEffect(() => {
     mainObsRef.current?.disconnect();
     const el = sentinelRef.current;
@@ -1318,38 +1328,7 @@ export function AssetTable({ search }: AssetTableProps) {
 
     const obs = new IntersectionObserver(
       (entries) => {
-        if (entries[0].isIntersecting) {
-          // Call loadMoreFlat via ref to avoid stale closure
-          setLoading((l) => {
-            if (!l) {
-              // Trigger in next tick
-              setTimeout(() => {
-                setHasMore((hm) => {
-                  if (hm) {
-                    setCursor((cur) => {
-                      setFlatItems((items) => {
-                        fetchPage(filteredDataset, cur).then((result) => {
-                          setFlatItems((prev) => [...prev, ...result.items]);
-                          setCursor(result.nextCursor);
-                          setHasMore(result.hasMore);
-                          setLoadStatus(
-                            result.hasMore
-                              ? `Loaded ${result.nextCursor.toLocaleString()} of ${filteredDataset.length.toLocaleString()} assets`
-                              : `All ${filteredDataset.length.toLocaleString()} assets loaded`
-                          );
-                        });
-                        return items;
-                      });
-                      return cur;
-                    });
-                  }
-                  return hm;
-                });
-              }, 0);
-            }
-            return l;
-          });
-        }
+        if (entries[0].isIntersecting) loadMoreFlatRef.current();
       },
       { rootMargin: "200px" }
     );
@@ -1358,14 +1337,6 @@ export function AssetTable({ search }: AssetTableProps) {
     return () => obs.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBy, filteredDataset]);
-
-  /* Initial load trigger for flat mode */
-  useEffect(() => {
-    if (!groupBy) {
-      loadMoreFlat();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredDataset, groupBy]);
 
   /* ============================================================
      SORT

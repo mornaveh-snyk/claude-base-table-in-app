@@ -1,23 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import {
-  Server,
-  ShieldAlert,
-  Eye,
-  Package,
-  Globe,
-  GitBranch,
-  Box,
-  Layers,
-  Activity,
-  Lock,
-  AlertTriangle,
-  CheckCircle,
-  Plus,
-  X,
-  ChevronDown,
-} from "lucide-react";
+import { Plus, X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DropdownMenu,
@@ -49,152 +33,23 @@ export interface Metric {
   value: string;
   delta: string;
   deltaPositive: boolean | null;
-  icon: React.ElementType;
-  iconColor: string;
-  iconBg: string;
 }
 
 const ALL_METRICS: Metric[] = [
-  {
-    key: "total_assets",
-    label: "Total Assets",
-    value: "1,842",
-    delta: "+24 this week",
-    deltaPositive: false,
-    icon: Server,
-    iconColor: "text-blue-600",
-    iconBg: "bg-blue-50",
-  },
-  {
-    key: "critical_risk",
-    label: "Critical Risk",
-    value: "48",
-    delta: "+5 since last scan",
-    deltaPositive: false,
-    icon: AlertTriangle,
-    iconColor: "text-red-600",
-    iconBg: "bg-red-50",
-  },
-  {
-    key: "high_risk",
-    label: "High Risk",
-    value: "137",
-    delta: "+8 since last scan",
-    deltaPositive: false,
-    icon: ShieldAlert,
-    iconColor: "text-orange-600",
-    iconBg: "bg-orange-50",
-  },
-  {
-    key: "unmonitored",
-    label: "Unmonitored",
-    value: "58",
-    delta: "-12 resolved",
-    deltaPositive: true,
-    icon: Eye,
-    iconColor: "text-yellow-600",
-    iconBg: "bg-yellow-50",
-  },
-  {
-    key: "packages",
-    label: "Packages",
-    value: "4,291",
-    delta: "Across all repos",
-    deltaPositive: null,
-    icon: Package,
-    iconColor: "text-green-700",
-    iconBg: "bg-green-50",
-  },
-  {
-    key: "repositories",
-    label: "Repositories",
-    value: "428",
-    delta: "+3 this week",
-    deltaPositive: false,
-    icon: GitBranch,
-    iconColor: "text-purple-600",
-    iconBg: "bg-purple-50",
-  },
-  {
-    key: "container_images",
-    label: "Container Images",
-    value: "241",
-    delta: "+11 this week",
-    deltaPositive: false,
-    icon: Box,
-    iconColor: "text-sky-600",
-    iconBg: "bg-sky-50",
-  },
-  {
-    key: "web_apps",
-    label: "Web Applications",
-    value: "76",
-    delta: "No change",
-    deltaPositive: null,
-    icon: Globe,
-    iconColor: "text-indigo-600",
-    iconBg: "bg-indigo-50",
-  },
-  {
-    key: "apis",
-    label: "APIs",
-    value: "124",
-    delta: "+2 this week",
-    deltaPositive: false,
-    icon: Activity,
-    iconColor: "text-teal-600",
-    iconBg: "bg-teal-50",
-  },
-  {
-    key: "dependencies",
-    label: "Dependencies",
-    value: "2,092",
-    delta: "Direct libraries",
-    deltaPositive: null,
-    icon: Layers,
-    iconColor: "text-violet-600",
-    iconBg: "bg-violet-50",
-  },
-  {
-    key: "monitored",
-    label: "Monitored",
-    value: "1,784",
-    delta: "96% coverage",
-    deltaPositive: true,
-    icon: CheckCircle,
-    iconColor: "text-emerald-600",
-    iconBg: "bg-emerald-50",
-  },
-  {
-    key: "no_controls",
-    label: "No Controls",
-    value: "203",
-    delta: "+17 this week",
-    deltaPositive: false,
-    icon: Lock,
-    iconColor: "text-rose-600",
-    iconBg: "bg-rose-50",
-  },
-  {
-    key: "active_issues",
-    label: "Active Issues",
-    value: "93",
-    delta: "Across all assets",
-    deltaPositive: null,
-    icon: AlertTriangle,
-    iconColor: "text-amber-600",
-    iconBg: "bg-amber-50",
-  },
-  {
-    key: "resolved_issues",
-    label: "Resolved Issues",
-    value: "312",
-    delta: "+44 this month",
-    deltaPositive: true,
-    icon: CheckCircle,
-    iconColor: "text-green-600",
-    iconBg: "bg-green-50",
-  },
+  { key: "total_assets",     label: "Total Assets",       value: "1,842", delta: "+24 this week",      deltaPositive: false },
+  { key: "critical_risk",    label: "Critical Risk",      value: "48",    delta: "+5 since last scan",  deltaPositive: false },
+  { key: "high_risk",        label: "High Risk",          value: "137",   delta: "+8 since last scan",  deltaPositive: false },
+  { key: "unmonitored",      label: "Unmonitored",        value: "58",    delta: "-12 resolved",        deltaPositive: true  },
+  { key: "packages",         label: "Packages",           value: "4,291", delta: "Across all repos",    deltaPositive: null  },
+  { key: "repositories",     label: "Repositories",       value: "428",   delta: "+3 this week",        deltaPositive: false },
+  { key: "container_images", label: "Container Images",   value: "241",   delta: "+11 this week",       deltaPositive: false },
+  { key: "web_apps",         label: "Web Applications",   value: "76",    delta: "No change",           deltaPositive: null  },
+  { key: "apis",             label: "APIs",               value: "124",   delta: "+2 this week",        deltaPositive: false },
+  { key: "dependencies",     label: "Dependencies",       value: "2,092", delta: "Direct libraries",    deltaPositive: null  },
+  { key: "monitored",        label: "Monitored",          value: "1,784", delta: "96% coverage",        deltaPositive: true  },
+  { key: "no_controls",      label: "No Controls",        value: "203",   delta: "+17 this week",       deltaPositive: false },
+  { key: "active_issues",    label: "Active Issues",      value: "93",    delta: "Across all assets",   deltaPositive: null  },
+  { key: "resolved_issues",  label: "Resolved Issues",    value: "312",   delta: "+44 this month",      deltaPositive: true  },
 ];
 
 const DEFAULT_VISIBLE: MetricKey[] = [
@@ -230,17 +85,14 @@ export function BillboardCards() {
 
   return (
     <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-      {visibleMetrics.map(({ key, label, value, delta, deltaPositive, icon: Icon, iconColor, iconBg }) => (
+      {visibleMetrics.map(({ key, label, value, delta, deltaPositive }) => (
         <div
           key={key}
           className="bg-card border border-border rounded-lg p-4 flex flex-col gap-3 group relative"
         >
-          <div className="flex items-start justify-between">
-            <div className={cn("w-9 h-9 rounded-md flex items-center justify-center shrink-0", iconBg)}>
-              <Icon className={cn("w-4 h-4", iconColor)} />
-            </div>
-            {/* Per-card replace dropdown */}
-            <DropdownMenu>
+          {/* Per-card replace dropdown — absolutely positioned so it takes no flow space */}
+          <DropdownMenu>
+            <div className="absolute top-2 right-2">
               <DropdownMenuTrigger asChild>
                 <button
                   aria-label={`Change ${label} metric`}
@@ -254,9 +106,6 @@ export function BillboardCards() {
                 <DropdownMenuSeparator />
                 {ALL_METRICS.filter((m) => m.key !== key && !visibleKeys.includes(m.key)).map((m) => (
                   <DropdownMenuItem key={m.key} onClick={() => replaceCard(key, m.key)}>
-                    <div className={cn("w-5 h-5 rounded flex items-center justify-center shrink-0", m.iconBg)}>
-                      <m.icon className={cn("w-3 h-3", m.iconColor)} />
-                    </div>
                     {m.label}
                   </DropdownMenuItem>
                 ))}
@@ -269,8 +118,8 @@ export function BillboardCards() {
                   Remove card
                 </DropdownMenuItem>
               </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
+            </div>
+          </DropdownMenu>
 
           <div>
             <div className="text-2xl font-semibold text-foreground tabular-nums">{value}</div>
@@ -306,9 +155,6 @@ export function BillboardCards() {
             <DropdownMenuSeparator />
             {availableToAdd.map((m) => (
               <DropdownMenuItem key={m.key} onClick={() => addCard(m.key)}>
-                <div className={cn("w-5 h-5 rounded flex items-center justify-center shrink-0", m.iconBg)}>
-                  <m.icon className={cn("w-3 h-3", m.iconColor)} />
-                </div>
                 {m.label}
               </DropdownMenuItem>
             ))}
