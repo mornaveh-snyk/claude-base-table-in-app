@@ -57,9 +57,9 @@ export function AppContent() {
           }
         }} />
       <ViewsDocumentationModal />
-      <div className="flex flex-col flex-1">
+      <div className="flex flex-col flex-1 min-w-0">
         <TopNavigationBar />
-        <div className="flex flex-1 overflow-hidden">
+        <div className="flex flex-1 overflow-hidden min-w-0">
           {appView !== "all-saved-views" && (
             <SecondarySidebar 
               currentPage={currentPage}
@@ -67,7 +67,7 @@ export function AppContent() {
               onNavigateToAllViews={handleNavigateToAllViews} 
             />
           )}
-          <div className="flex-1 overflow-auto">
+          <div className="flex-1 overflow-y-auto overflow-x-hidden">
             {appView === "inventory" && (
               <>
                 {currentPage === "asset-management" && <AssetManagementPage />}
