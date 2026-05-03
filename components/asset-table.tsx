@@ -7,6 +7,11 @@ import {
   useCallback,
   useMemo,
 } from "react";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 /* ============================================================
    CONSTANTS
@@ -383,6 +388,9 @@ function fetchSubGroupPage(
    ============================================================ */
 
 type SortDir = "asc" | "desc";
+type GroupOrder = "label-asc" | "label-desc" | "count-desc" | "critical-desc";
+interface GroupLevel { field: string; order: GroupOrder; }
+interface SortRule { col: ColId; dir: SortDir; }
 
 function sortGroupList<T extends { label: string; count: number; issues: { critical: number } }>(
   arr: T[],
@@ -398,18 +406,21 @@ function sortGroupList<T extends { label: string; count: number; issues: { criti
   });
 }
 
-function sortItemsList(items: AssetItem[], col: ColId | null, dir: SortDir): AssetItem[] {
-  if (!col) return items;
+function sortItemsList(items: AssetItem[], rules: SortRule[]): AssetItem[] {
+  if (!rules.length) return items;
   return [...items].sort((a, b) => {
-    let cmp = 0;
-    if (col === "riskScore") {
-      cmp = a.riskScore - b.riskScore;
-    } else {
-      const aVal = String((a as unknown as Record<string, unknown>)[col] ?? "");
-      const bVal = String((b as unknown as Record<string, unknown>)[col] ?? "");
-      cmp = aVal.localeCompare(bVal);
+    for (const { col, dir } of rules) {
+      let cmp = 0;
+      if (col === "riskScore") {
+        cmp = a.riskScore - b.riskScore;
+      } else {
+        const aVal = String((a as unknown as Record<string, unknown>)[col] ?? "");
+        const bVal = String((b as unknown as Record<string, unknown>)[col] ?? "");
+        cmp = aVal.localeCompare(bVal);
+      }
+      if (cmp !== 0) return dir === "asc" ? cmp : -cmp;
     }
-    return dir === "asc" ? cmp : -cmp;
+    return 0;
   });
 }
 
@@ -879,6 +890,157 @@ interface AssetTableProps {
   search?: string;
 }
 
+/* ============================================================
+   PANEL COMPONENTS (Group / Sort popovers)
+   ============================================================ */
+
+function GroupPanel({
+  groupLevels,
+  onChange,
+}: {
+  groupLevels: GroupLevel[];
+  onChange: (levels: GroupLevel[]) => void;
+}) {
+  const usedFields = new Set(groupLevels.map((l) => l.field));
+  return (
+    <>
+      {groupLevels.length === 0 && (
+        <div className="at-cp-empty">No grouping applied</div>
+      )}
+      {groupLevels.map((level, i) => (
+        <div key={i} className="at-cp-row">
+          <select
+            className="at-cp-select at-cp-select--field"
+            value={level.field}
+            onChange={(e) => {
+              const next = [...groupLevels];
+              next[i] = { ...next[i], field: e.target.value };
+              onChange(next);
+            }}
+          >
+            {GROUP_OPTIONS.filter((o) => o.value === level.field || !usedFields.has(o.value)).map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+          <select
+            className="at-cp-select at-cp-select--order"
+            value={level.order}
+            onChange={(e) => {
+              const next = [...groupLevels];
+              next[i] = { ...next[i], order: e.target.value as GroupOrder };
+              onChange(next);
+            }}
+          >
+            <option value="label-asc">Name A → Z</option>
+            <option value="label-desc">Name Z → A</option>
+            <option value="count-desc">Count (most)</option>
+            <option value="critical-desc">Issues (most)</option>
+          </select>
+          <button
+            className="at-cp-remove"
+            onClick={() => onChange(groupLevels.filter((_, li) => li !== i))}
+            aria-label="Remove grouping"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      ))}
+      <div className="at-cp-footer">
+        {groupLevels.length < GROUP_OPTIONS.length && (
+          <button
+            className="at-cp-add"
+            onClick={() => {
+              const first = GROUP_OPTIONS.find((o) => !usedFields.has(o.value));
+              if (first) onChange([...groupLevels, { field: first.value, order: "label-asc" }]);
+            }}
+          >
+            + Add level
+          </button>
+        )}
+        {groupLevels.length > 0 && (
+          <button className="at-cp-clear" onClick={() => onChange([])}>Clear all</button>
+        )}
+      </div>
+    </>
+  );
+}
+
+function SortPanel({
+  sortRules,
+  columns,
+  onChange,
+}: {
+  sortRules: SortRule[];
+  columns: ColDef[];
+  onChange: (rules: SortRule[]) => void;
+}) {
+  const sortableCols = columns.filter((c) => c.sortable && c.id !== "select" && c.id !== "actions");
+  const usedCols = new Set(sortRules.map((r) => r.col));
+  return (
+    <>
+      {sortRules.length === 0 && (
+        <div className="at-cp-empty">No sort applied</div>
+      )}
+      {sortRules.map((rule, i) => (
+        <div key={i} className="at-cp-row">
+          <select
+            className="at-cp-select at-cp-select--field"
+            value={rule.col}
+            onChange={(e) => {
+              const next = [...sortRules];
+              next[i] = { ...next[i], col: e.target.value as ColId };
+              onChange(next);
+            }}
+          >
+            {sortableCols.filter((c) => c.id === rule.col || !usedCols.has(c.id)).map((c) => (
+              <option key={c.id} value={c.id}>{c.label}</option>
+            ))}
+          </select>
+          <select
+            className="at-cp-select at-cp-select--order"
+            value={rule.dir}
+            onChange={(e) => {
+              const next = [...sortRules];
+              next[i] = { ...next[i], dir: e.target.value as SortDir };
+              onChange(next);
+            }}
+          >
+            <option value="asc">A → Z</option>
+            <option value="desc">Z → A</option>
+          </select>
+          <button
+            className="at-cp-remove"
+            onClick={() => onChange(sortRules.filter((_, ri) => ri !== i))}
+            aria-label="Remove sort rule"
+          >
+            <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+              <path d="M1 1l8 8M9 1L1 9" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
+          </button>
+        </div>
+      ))}
+      <div className="at-cp-footer">
+        {sortRules.length < sortableCols.length && (
+          <button
+            className="at-cp-add"
+            onClick={() => {
+              const first = sortableCols.find((c) => !usedCols.has(c.id));
+              if (first) onChange([...sortRules, { col: first.id, dir: "asc" }]);
+            }}
+          >
+            + Add sort rule
+          </button>
+        )}
+        {sortRules.length > 0 && (
+          <button className="at-cp-clear" onClick={() => onChange([])}>Clear all</button>
+        )}
+      </div>
+    </>
+  );
+}
+
 export function AssetTable({ search }: AssetTableProps) {
   /* ---- filtered dataset ---- */
   const filteredDataset = useMemo<AssetItem[]>(() => {
@@ -903,11 +1065,9 @@ export function AssetTable({ search }: AssetTableProps) {
   const [loading, setLoading] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  /* ---- grouping state ---- */
-  const [groupBy, setGroupBy] = useState<string | null>(null);
-  const [groupBy2, setGroupBy2] = useState<string | null>(null);
-  const [groupSortField, setGroupSortField] = useState<"label" | "count" | "critical">("label");
-  const [groupSortDir, setGroupSortDir] = useState<SortDir>("asc");
+  /* ---- grouping + sort state ---- */
+  const [groupLevels, setGroupLevels] = useState<GroupLevel[]>([]);
+  const [sortRules, setSortRules] = useState<SortRule[]>([]);
   const [groups, setGroups] = useState<GroupState[]>([]);
   const groupsRef = useRef<GroupState[]>([]);
   useEffect(() => { groupsRef.current = groups; }, [groups]);
@@ -917,9 +1077,16 @@ export function AssetTable({ search }: AssetTableProps) {
   const [selIncluded, setSelIncluded] = useState<Set<string>>(new Set());
   const [selExcluded, setSelExcluded] = useState<Set<string>>(new Set());
 
-  /* ---- sort ---- */
-  const [sortCol, setSortCol] = useState<ColId | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
+  /* ---- derived from groupLevels / sortRules ---- */
+  const groupBy = groupLevels[0]?.field ?? null;
+  const groupBy2 = groupLevels[1]?.field ?? null;
+  const primaryOrder = groupLevels[0]?.order ?? "label-asc";
+  const groupSortField: "label" | "count" | "critical" =
+    primaryOrder.startsWith("count") ? "count" :
+    primaryOrder.startsWith("critical") ? "critical" : "label";
+  const groupSortDir: SortDir = primaryOrder.endsWith("desc") ? "desc" : "asc";
+  const sortCol = sortRules[0]?.col ?? null;
+  const sortDir = sortRules[0]?.dir ?? "asc";
 
   /* ---- density / UI ---- */
   const [density, setDensity] = useState<Density>("comfortable");
@@ -1050,10 +1217,10 @@ export function AssetTable({ search }: AssetTableProps) {
      FLAT LOADING
      ============================================================ */
 
-  const sortedFlatItems = useMemo<AssetItem[]>(() => {
-    if (!sortCol) return flatItems;
-    return sortItemsList(flatItems, sortCol, sortDir);
-  }, [flatItems, sortCol, sortDir]);
+  const sortedFlatItems = useMemo<AssetItem[]>(
+    () => sortItemsList(flatItems, sortRules),
+    [flatItems, sortRules]
+  );
 
   const loadMoreFlat = useCallback(async () => {
     if (loading || !hasMore || groupBy) return;
@@ -1336,14 +1503,15 @@ export function AssetTable({ search }: AssetTableProps) {
 
   const handleSort = useCallback(
     (colId: ColId) => {
-      if (sortCol === colId) {
-        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-      } else {
-        setSortCol(colId);
-        setSortDir("asc");
-      }
+      setSortRules((prev) => {
+        const existing = prev[0];
+        if (existing?.col === colId) {
+          return [{ col: colId, dir: existing.dir === "asc" ? "desc" : "asc" }, ...prev.slice(1)];
+        }
+        return [{ col: colId, dir: "asc" }];
+      });
     },
-    [sortCol]
+    []
   );
 
   /* ============================================================
@@ -1393,95 +1561,46 @@ export function AssetTable({ search }: AssetTableProps) {
           <span className="at-table-header__count">{filteredDataset.length.toLocaleString()} assets</span>
         </div>
         <div className="at-table-header__actions">
-          {/* Grouping controls */}
-          <div className="at-grouping-controls">
-            <div className="at-segmented-control">
-              <label htmlFor="at-group-select" className="at-segmented-control__label">Group by:</label>
-              <select
-                id="at-group-select"
-                className="at-segmented-select"
-                value={groupBy ?? ""}
-                onChange={(e) => {
-                  const val = e.target.value || null;
-                  setGroupBy(val);
-                  if (!val) setGroupBy2(null);
-                }}
-              >
-                <option value="">None</option>
-                {GROUP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
 
-            {groupBy && (
-              <div className="at-segmented-control">
-                <label className="at-segmented-control__label">then by:</label>
-                <select
-                  className="at-segmented-select"
-                  value={groupBy2 ?? ""}
-                  onChange={(e) => setGroupBy2(e.target.value || null)}
-                >
-                  <option value="">None</option>
-                  {GROUP_OPTIONS.filter((o) => o.value !== groupBy).map((o) => (
-                    <option key={o.value} value={o.value}>{o.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
+          {/* Group */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className={`at-toolbar-btn${groupLevels.length > 0 ? " at-toolbar-btn--active" : ""}`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <rect x="1" y="1" width="12" height="3.5" rx="1" fill="currentColor"/>
+                  <rect x="1" y="6" width="12" height="3.5" rx="1" fill="currentColor" opacity="0.55"/>
+                  <rect x="1" y="11" width="8" height="2" rx="1" fill="currentColor" opacity="0.3"/>
+                </svg>
+                Group
+                {groupLevels.length > 0 && (
+                  <span className="at-toolbar-btn__badge">{groupLevels.length}</span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
+              <div className="at-cp-header">Group by</div>
+              <GroupPanel groupLevels={groupLevels} onChange={setGroupLevels} />
+            </PopoverContent>
+          </Popover>
 
-            {groupBy && (
-              <>
-                <div className="at-grouping-sep" />
-                <div className="at-segmented-control">
-                  <label className="at-segmented-control__label">Sort groups:</label>
-                  <select
-                    className="at-segmented-select"
-                    value={groupSortField}
-                    onChange={(e) => setGroupSortField(e.target.value as "label" | "count" | "critical")}
-                  >
-                    <option value="label">Name</option>
-                    <option value="count">Count</option>
-                    <option value="critical">Issues</option>
-                  </select>
-                  <button
-                    className="at-sort-dir-btn"
-                    onClick={() => setGroupSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                    aria-label={`Sort direction: ${groupSortDir}`}
-                    title={groupSortDir === "asc" ? "Ascending – click to reverse" : "Descending – click to reverse"}
-                  >
-                    {groupSortDir === "asc" ? "↑" : "↓"}
-                  </button>
-                </div>
-                <div className="at-grouping-sep" />
-                <div className="at-segmented-control">
-                  <label className="at-segmented-control__label">Sort items:</label>
-                  <select
-                    className="at-segmented-select"
-                    value={sortCol ?? ""}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setSortCol(v ? v as ColId : null);
-                      setSortDir("asc");
-                    }}
-                  >
-                    <option value="">None</option>
-                    {COLUMNS.filter((c) => c.sortable && c.id !== "select" && c.id !== "actions").map((c) => (
-                      <option key={c.id} value={c.id}>{c.label}</option>
-                    ))}
-                  </select>
-                  {sortCol && (
-                    <button
-                      className="at-sort-dir-btn"
-                      onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-                      aria-label={`Item sort direction: ${sortDir}`}
-                      title={sortDir === "asc" ? "Ascending – click to reverse" : "Descending – click to reverse"}
-                    >
-                      {sortDir === "asc" ? "↑" : "↓"}
-                    </button>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
+          {/* Sort */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <button className={`at-toolbar-btn${sortRules.length > 0 ? " at-toolbar-btn--active" : ""}`}>
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                  <path d="M2 3h10M3.5 7h7M5.5 11h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                </svg>
+                Sort
+                {sortRules.length > 0 && (
+                  <span className="at-toolbar-btn__badge">{sortRules.length}</span>
+                )}
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
+              <div className="at-cp-header">Sort items</div>
+              <SortPanel sortRules={sortRules} columns={columns} onChange={setSortRules} />
+            </PopoverContent>
+          </Popover>
 
           {/* Density toggle */}
           <div className="at-density-toggle" role="group" aria-label="Row density">
@@ -1622,7 +1741,7 @@ export function AssetTable({ search }: AssetTableProps) {
                                     {sub.loading && sub.items.length === 0 && (
                                       <div className="at-group-loading">Loading…</div>
                                     )}
-                                    {sortItemsList(sub.items, sortCol, sortDir).map((item, idx) => (
+                                    {sortItemsList(sub.items, sortRules).map((item, idx) => (
                                       <DataRow key={item.id} item={item} rowIndex={idx + 1}
                                         visibleCols={visibleCols} isSelected={isSelected(item.id)}
                                         onToggle={toggleItem} onOpen={setPanelItem} />
@@ -1643,7 +1762,7 @@ export function AssetTable({ search }: AssetTableProps) {
                             {group.loading && group.items.length === 0 && (
                               <div className="at-group-loading">Loading…</div>
                             )}
-                            {sortItemsList(group.items, sortCol, sortDir).map((item, idx) => (
+                            {sortItemsList(group.items, sortRules).map((item, idx) => (
                               <DataRow key={item.id} item={item} rowIndex={idx + 1}
                                 visibleCols={visibleCols} isSelected={isSelected(item.id)}
                                 onToggle={toggleItem} onOpen={setPanelItem} />

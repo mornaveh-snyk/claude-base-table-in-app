@@ -222,76 +222,178 @@
   flex-wrap: wrap;
 }
 
-/* === GROUPING CONTROLS === */
-.at-grouping-controls {
+/* === TOOLBAR BUTTON (Group / Sort) === */
+.at-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--at-text-2);
+  background: var(--at-surface);
+  border: 1px solid var(--at-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+  white-space: nowrap;
+}
+
+.at-toolbar-btn:hover {
+  background: var(--at-row-hover);
+  color: var(--at-text);
+  border-color: var(--at-border-strong);
+}
+
+.at-toolbar-btn:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: 1px;
+}
+
+.at-toolbar-btn--active {
+  background: color-mix(in srgb, var(--at-accent) 10%, transparent);
+  color: var(--at-accent);
+  border-color: color-mix(in srgb, var(--at-accent) 35%, transparent);
+}
+
+.at-toolbar-btn--active:hover {
+  background: color-mix(in srgb, var(--at-accent) 16%, transparent);
+}
+
+.at-toolbar-btn__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  background: var(--at-accent);
+  color: #fff;
+  border-radius: 9px;
+  line-height: 1;
+}
+
+/* === CONFIG PANEL (inside popover) === */
+.at-cp-header {
+  padding: 10px 14px 8px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--at-text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--at-border);
+}
+
+.at-cp-empty {
+  padding: 16px 14px;
+  font-size: 13px;
+  color: var(--at-text-3);
+  text-align: center;
+  font-style: italic;
+}
+
+.at-cp-row {
   display: flex;
   align-items: center;
   gap: 6px;
+  padding: 6px 10px;
 }
 
-.at-grouping-sep {
-  width: 1px;
-  height: 18px;
-  background: var(--at-border-strong);
-  flex-shrink: 0;
-  margin: 0 2px;
+.at-cp-row + .at-cp-row {
+  border-top: 1px solid var(--at-border);
 }
 
-.at-sort-dir-btn {
-  height: 30px;
-  width: 30px;
-  background: var(--at-surface);
-  border: 1px solid var(--at-border-strong);
-  border-radius: 6px;
-  color: var(--at-text-2);
-  font-size: 14px;
+.at-cp-select {
+  height: 28px;
+  padding: 0 6px;
+  font-size: 13px;
+  color: var(--at-text);
+  background: var(--at-bg);
+  border: 1px solid var(--at-border);
+  border-radius: 5px;
   cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.at-cp-select:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: 1px;
+}
+
+.at-cp-select--field {
+  flex: 1;
+  min-width: 0;
+}
+
+.at-cp-select--order {
+  flex: 0 0 108px;
+  font-size: 12px;
+  color: var(--at-text-2);
+}
+
+.at-cp-remove {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
   display: flex;
   align-items: center;
   justify-content: center;
-  flex-shrink: 0;
+  color: var(--at-text-3);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
   transition: background 0.1s, color 0.1s;
 }
 
-.at-sort-dir-btn:hover {
+.at-cp-remove:hover {
   background: var(--at-row-hover);
   color: var(--at-text);
 }
 
-.at-sort-dir-btn:focus-visible {
-  outline: 2px solid var(--at-accent);
-  outline-offset: 1px;
-}
-
-/* === SEGMENTED CONTROL === */
-.at-segmented-control {
+.at-cp-footer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  border-top: 1px solid var(--at-border);
   gap: 6px;
 }
 
-.at-segmented-control__label {
+.at-cp-add {
   font-size: 13px;
-  color: var(--at-text-3);
-  white-space: nowrap;
-}
-
-.at-segmented-select {
-  height: 30px;
-  padding: 0 28px 0 10px;
-  font-size: 13px;
-  color: var(--at-text);
-  background: var(--at-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%236b7280'/%3E%3C/svg%3E") no-repeat right 8px center;
-  border: 1px solid var(--at-border-strong);
-  border-radius: 6px;
-  appearance: none;
-  -webkit-appearance: none;
+  color: var(--at-accent);
+  background: transparent;
+  border: none;
   cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.1s;
 }
 
-.at-segmented-select:focus-visible {
-  outline: 2px solid var(--at-accent);
-  outline-offset: 1px;
+.at-cp-add:hover {
+  background: color-mix(in srgb, var(--at-accent) 10%, transparent);
+}
+
+.at-cp-clear {
+  font-size: 12px;
+  color: var(--at-text-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 3px 6px;
+  border-radius: 4px;
+  transition: background 0.1s, color 0.1s;
+}
+
+.at-cp-clear:hover {
+  background: var(--at-row-hover);
+  color: var(--at-text);
 }
 
 /* === DENSITY TOGGLE === */
