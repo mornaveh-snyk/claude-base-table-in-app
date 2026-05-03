@@ -179,16 +179,17 @@
 
 /* === TABLE HEADER === */
 .at-table-header {
-  height: 56px;
   min-height: 56px;
+  height: auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 16px 0 20px;
+  padding: 8px 16px 8px 20px;
   border-bottom: 1px solid var(--at-border);
   background: var(--at-surface);
   flex-shrink: 0;
-  gap: 12px;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .at-table-header__caption {
@@ -217,8 +218,49 @@
 .at-table-header__actions {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: nowrap;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* === GROUPING CONTROLS === */
+.at-grouping-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.at-grouping-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--at-border-strong);
+  flex-shrink: 0;
+  margin: 0 2px;
+}
+
+.at-sort-dir-btn {
+  height: 30px;
+  width: 30px;
+  background: var(--at-surface);
+  border: 1px solid var(--at-border-strong);
+  border-radius: 6px;
+  color: var(--at-text-2);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.at-sort-dir-btn:hover {
+  background: var(--at-row-hover);
+  color: var(--at-text);
+}
+
+.at-sort-dir-btn:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: 1px;
 }
 
 /* === SEGMENTED CONTROL === */
@@ -651,6 +693,56 @@
 
 .at-group-body {
   /* container for expanded group rows */
+}
+
+/* === SUB-GROUP HEADER ROWS === */
+.at-sub-group-header-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  background: var(--at-surface);
+  border-bottom: 1px solid var(--at-border);
+  border-left: 3px solid var(--at-border-strong);
+  cursor: pointer;
+  outline: none;
+  position: sticky;
+  left: 0;
+  width: var(--wrapper-width, 100%);
+  z-index: 4;
+}
+
+.at-density-comfortable .at-sub-group-header-row {
+  height: 44px;
+  top: 96px; /* 40px grid header + 56px primary group header */
+}
+
+.at-density-compact .at-sub-group-header-row {
+  height: 36px;
+  top: 80px; /* 40px grid header + 40px primary group header */
+}
+
+.at-sub-group-header-row:hover {
+  background: var(--at-row-hover);
+}
+
+.at-sub-group-header-row:focus-visible {
+  outline: 2px solid var(--at-accent);
+  outline-offset: -2px;
+  z-index: 5;
+}
+
+.at-sub-group-header-cell {
+  padding-left: 32px !important;
+}
+
+.at-sub-group-name {
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  color: var(--at-text-2) !important;
+}
+
+.at-sub-group-body {
+  padding-left: 20px;
+  border-left: 3px solid var(--at-border);
 }
 
 .at-group-loading {

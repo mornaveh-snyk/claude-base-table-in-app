@@ -56,6 +56,13 @@ const COLUMNS: ColDef[] = [
   { id: "actions",     label: "",             width: 56,  sticky: false, visible: true,  sortable: false },
 ];
 
+const GROUP_OPTIONS = [
+  { value: "assetClass", label: "Class" },
+  { value: "team",       label: "Team"  },
+  { value: "type",       label: "Type"  },
+  { value: "environment",label: "Environment" },
+];
+
 /* ============================================================
    DATA GENERATOR
    ============================================================ */
@@ -267,7 +274,6 @@ function generateDataset(): AssetItem[] {
   return items;
 }
 
-// Generated at module level — fine for prototype
 const DATASET = generateDataset();
 
 /* ============================================================
@@ -316,33 +322,21 @@ function computeGroups(allItems: AssetItem[], groupBy: string): GroupMeta[] {
   for (const item of allItems) {
     const key = String((item as unknown as Record<string, unknown>)[groupBy]);
     if (!map.has(key)) {
-      map.set(key, {
-        id: key,
-        label: key,
-        count: 0,
-        issues: { critical: 0, high: 0, medium: 0, low: 0 },
-      });
+      map.set(key, { id: key, label: key, count: 0, issues: { critical: 0, high: 0, medium: 0, low: 0 } });
     }
     const g = map.get(key)!;
     g.count++;
     g.issues.critical += item.issues.critical;
-    g.issues.high += item.issues.high;
-    g.issues.medium += item.issues.medium;
-    g.issues.low += item.issues.low;
+    g.issues.high     += item.issues.high;
+    g.issues.medium   += item.issues.medium;
+    g.issues.low      += item.issues.low;
   }
-  return Array.from(map.values()).sort((a, b) =>
-    a.label.localeCompare(b.label)
-  );
+  return Array.from(map.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function fetchGroupMetadata(
-  allItems: AssetItem[],
-  groupBy: string
-): Promise<GroupMeta[]> {
+function fetchGroupMetadata(allItems: AssetItem[], groupBy: string): Promise<GroupMeta[]> {
   return new Promise((resolve) => {
-    setTimeout(() => {
-      resolve(computeGroups(allItems, groupBy));
-    }, 300);
+    setTimeout(() => resolve(computeGroups(allItems, groupBy)), 300);
   });
 }
 
@@ -358,12 +352,64 @@ function fetchGroupPage(
         (item) => String((item as unknown as Record<string, unknown>)[groupBy]) === groupId
       );
       const slice = groupItems.slice(cursor, cursor + PAGE_SIZE);
-      resolve({
-        items: slice,
-        nextCursor: cursor + slice.length,
-        hasMore: cursor + slice.length < groupItems.length,
-      });
+      resolve({ items: slice, nextCursor: cursor + slice.length, hasMore: cursor + slice.length < groupItems.length });
     }, 250);
+  });
+}
+
+function fetchSubGroupPage(
+  allItems: AssetItem[],
+  primaryBy: string,
+  primaryId: string,
+  secondaryBy: string,
+  subGroupId: string,
+  cursor: number
+): Promise<PageResult> {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const items = allItems.filter(
+        (item) =>
+          String((item as unknown as Record<string, unknown>)[primaryBy]) === primaryId &&
+          String((item as unknown as Record<string, unknown>)[secondaryBy]) === subGroupId
+      );
+      const slice = items.slice(cursor, cursor + PAGE_SIZE);
+      resolve({ items: slice, nextCursor: cursor + slice.length, hasMore: cursor + slice.length < items.length });
+    }, 250);
+  });
+}
+
+/* ============================================================
+   SORT HELPERS
+   ============================================================ */
+
+type SortDir = "asc" | "desc";
+
+function sortGroupList<T extends { label: string; count: number; issues: { critical: number } }>(
+  arr: T[],
+  field: "label" | "count" | "critical",
+  dir: SortDir
+): T[] {
+  return [...arr].sort((a, b) => {
+    let cmp = 0;
+    if (field === "label")    cmp = a.label.localeCompare(b.label);
+    else if (field === "count") cmp = a.count - b.count;
+    else                      cmp = a.issues.critical - b.issues.critical;
+    return dir === "asc" ? cmp : -cmp;
+  });
+}
+
+function sortItemsList(items: AssetItem[], col: ColId | null, dir: SortDir): AssetItem[] {
+  if (!col) return items;
+  return [...items].sort((a, b) => {
+    let cmp = 0;
+    if (col === "riskScore") {
+      cmp = a.riskScore - b.riskScore;
+    } else {
+      const aVal = String((a as unknown as Record<string, unknown>)[col] ?? "");
+      const bVal = String((b as unknown as Record<string, unknown>)[col] ?? "");
+      cmp = aVal.localeCompare(bVal);
+    }
+    return dir === "asc" ? cmp : -cmp;
   });
 }
 
@@ -373,9 +419,8 @@ function fetchGroupPage(
 
 type SelMode = "none" | "some" | "all";
 type Density = "comfortable" | "compact";
-type SortDir = "asc" | "desc";
 
-interface GroupState extends GroupMeta {
+interface SubGroupState extends GroupMeta {
   expanded: boolean;
   items: AssetItem[];
   cursor: number;
@@ -383,17 +428,22 @@ interface GroupState extends GroupMeta {
   loading: boolean;
 }
 
+interface GroupState extends GroupMeta {
+  expanded: boolean;
+  items: AssetItem[];
+  cursor: number;
+  hasMore: boolean;
+  loading: boolean;
+  subGroups: SubGroupState[] | null;
+  subGroupsLoading: boolean;
+}
+
 /* ============================================================
    COVERAGE ABBREV
    ============================================================ */
 
 const COVERAGE_ABBREV: Record<string, string> = {
-  SCM: "SCM",
-  SAST: "SAT",
-  Secrets: "SEC",
-  DAST: "DST",
-  Container: "CTR",
-  IaC: "IaC",
+  SCM: "SCM", SAST: "SAT", Secrets: "SEC", DAST: "DST", Container: "CTR", IaC: "IaC",
 };
 
 /* ============================================================
@@ -413,9 +463,7 @@ function IssueCounts({ issues }: { issues: AssetItem["issues"] }) {
       ).map(({ key, label, iconCls, cntCls }) => (
         <div key={key} className="at-issue-item">
           <div className={`at-issue-icon ${iconCls}`} aria-hidden="true">{label}</div>
-          <span className={cntCls} aria-label={`${issues[key]} ${key}`}>
-            {issues[key]}
-          </span>
+          <span className={cntCls} aria-label={`${issues[key]} ${key}`}>{issues[key]}</span>
         </div>
       ))}
     </div>
@@ -423,11 +471,7 @@ function IssueCounts({ issues }: { issues: AssetItem["issues"] }) {
 }
 
 function ClassBadge({ cls }: { cls: string }) {
-  return (
-    <span className={`at-class-badge at-class-badge--${cls.toLowerCase()}`}>
-      {cls}
-    </span>
-  );
+  return <span className={`at-class-badge at-class-badge--${cls.toLowerCase()}`}>{cls}</span>;
 }
 
 function ScoreBadge({ score }: { score: number }) {
@@ -468,81 +512,65 @@ function SourceCell({ source }: { source: string[] }) {
   const overflow = source.length - visible.length;
   return (
     <div className="at-tags-list">
-      {visible.map((s) => (
-        <span key={s} className="at-tag-badge">{s}</span>
-      ))}
-      {overflow > 0 && (
-        <span className="at-tags-overflow">+{overflow}</span>
-      )}
+      {visible.map((s) => <span key={s} className="at-tag-badge">{s}</span>)}
+      {overflow > 0 && <span className="at-tags-overflow">+{overflow}</span>}
     </div>
   );
 }
 
 function EnvBadge({ env }: { env: string }) {
   const cls = env.toLowerCase().replace(" ", "-");
-  return (
-    <span className={`at-env-badge at-env-badge--${cls}`}>{env}</span>
-  );
+  return <span className={`at-env-badge at-env-badge--${cls}`}>{env}</span>;
 }
 
-/* GroupSentinel: own component so IntersectionObserver attaches cleanly */
-function GroupSentinel({
-  groupId,
-  onIntersect,
-}: {
-  groupId: string;
-  onIntersect: (id: string) => void;
-}) {
+function GroupSentinel({ groupId, onIntersect }: { groupId: string; onIntersect: (id: string) => void }) {
   const ref = useRef<HTMLDivElement>(null);
-
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
     const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) onIntersect(groupId);
-      },
+      (entries) => { if (entries[0].isIntersecting) onIntersect(groupId); },
       { rootMargin: "200px" }
     );
     obs.observe(el);
     return () => obs.disconnect();
   }, [groupId, onIntersect]);
-
-  return (
-    <div
-      ref={ref}
-      className="at-sentinel"
-      aria-hidden="true"
-      data-group-sentinel={groupId}
-    />
-  );
+  return <div ref={ref} className="at-sentinel" aria-hidden="true" data-group-sentinel={groupId} />;
 }
 
-/* ============================================================
-   DETAIL PANEL
-   ============================================================ */
-
-function DetailPanel({
-  item,
-  onClose,
+function SubGroupSentinel({
+  groupId,
+  subGroupId,
+  onIntersect,
 }: {
-  item: AssetItem | null;
-  onClose: () => void;
+  groupId: string;
+  subGroupId: string;
+  onIntersect: (gId: string, sgId: string) => void;
 }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) onIntersect(groupId, subGroupId); },
+      { rootMargin: "200px" }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [groupId, subGroupId, onIntersect]);
+  return <div ref={ref} className="at-sentinel" aria-hidden="true" />;
+}
+
+function DetailPanel({ item, onClose }: { item: AssetItem | null; onClose: () => void }) {
   const closeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    if (item) {
-      setTimeout(() => closeRef.current?.focus(), 50);
-    }
+    if (item) setTimeout(() => closeRef.current?.focus(), 50);
   }, [item]);
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && item) {
-        e.preventDefault();
-        onClose();
-      }
+      if (e.key === "Escape" && item) { e.preventDefault(); onClose(); }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
@@ -550,13 +578,7 @@ function DetailPanel({
 
   return (
     <>
-      {item && (
-        <div
-          className="at-backdrop"
-          onClick={onClose}
-          aria-hidden="true"
-        />
-      )}
+      {item && <div className="at-backdrop" onClick={onClose} aria-hidden="true" />}
       <div
         className="at-detail-panel"
         aria-hidden={!item ? "true" : "false"}
@@ -564,22 +586,15 @@ function DetailPanel({
         aria-label={item ? `Asset details: ${item.name}` : "Asset details"}
       >
         <div className="at-detail-panel-inner">
-          <button
-            ref={closeRef}
-            className="at-detail-close"
-            onClick={onClose}
-            aria-label="Close details panel"
-          >
+          <button ref={closeRef} className="at-detail-close" onClick={onClose} aria-label="Close details panel">
             <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
               <path d="M12 4L4 12M4 4l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
           </button>
-
           {item && (
             <>
               <h2>{item.name}</h2>
               <p className="at-detail-subtitle">{item.type} · {item.id}</p>
-
               <div className="at-detail-section">
                 <h3>Risk Overview</h3>
                 {[
@@ -596,7 +611,6 @@ function DetailPanel({
                   </div>
                 ))}
               </div>
-
               <div className="at-detail-section">
                 <h3>Metadata</h3>
                 {[
@@ -629,110 +643,53 @@ function DetailPanel({
    ============================================================ */
 
 function CellContent({
-  col,
-  item,
-  onOpen,
-  isSelected,
-  onToggle,
+  col, item, onOpen, isSelected, onToggle,
 }: {
-  col: ColDef;
-  item: AssetItem;
-  onOpen: (item: AssetItem) => void;
-  isSelected: boolean;
-  onToggle: (id: string) => void;
+  col: ColDef; item: AssetItem; onOpen: (item: AssetItem) => void; isSelected: boolean; onToggle: (id: string) => void;
 }) {
   switch (col.id) {
     case "select":
       return (
-        <input
-          type="checkbox"
-          aria-label={`Select ${item.name}`}
-          checked={isSelected}
-          onChange={(e) => { e.stopPropagation(); onToggle(item.id); }}
-        />
+        <input type="checkbox" aria-label={`Select ${item.name}`} checked={isSelected}
+          onChange={(e) => { e.stopPropagation(); onToggle(item.id); }} />
       );
-
     case "name":
       return (
         <div className="at-asset-name-cell">
-          <button
-            className="at-asset-name-primary"
-            aria-label={`Open ${item.name}`}
-            onClick={(e) => { e.stopPropagation(); onOpen(item); }}
-          >
+          <button className="at-asset-name-primary" aria-label={`Open ${item.name}`}
+            onClick={(e) => { e.stopPropagation(); onOpen(item); }}>
             {item.name}
           </button>
-          <span className="at-asset-name-secondary">
-            {getSecondaryLine(item)}
-          </span>
+          <span className="at-asset-name-secondary">{getSecondaryLine(item)}</span>
         </div>
       );
-
     case "type":
-      return (
-        <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.type}
-        </span>
-      );
-
+      return <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.type}</span>;
     case "assetClass":
       return <ClassBadge cls={item.assetClass} />;
-
     case "issueCounts":
       return <IssueCounts issues={item.issues} />;
-
     case "riskScore":
       return <ScoreBadge score={item.riskScore} />;
-
     case "coverage":
       return <CoverageCell coverage={item.coverage} />;
-
     case "team":
-      return (
-        <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.team}
-        </span>
-      );
-
+      return <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.team}</span>;
     case "language":
-      return (
-        <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-          {item.language}
-        </span>
-      );
-
+      return <span style={{ color: "var(--at-text-2)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.language}</span>;
     case "environment":
       return <EnvBadge env={item.environment} />;
-
     case "lastScan":
-      return (
-        <span style={{ fontSize: "12px", color: "var(--at-text-2)" }}>
-          {item.lastScan}
-        </span>
-      );
-
+      return <span style={{ fontSize: "12px", color: "var(--at-text-2)" }}>{item.lastScan}</span>;
     case "source":
       return <SourceCell source={item.source} />;
-
     case "visibility":
-      return (
-        <span style={{ fontSize: "12px", color: "var(--at-text-2)" }}>
-          {item.visibility}
-        </span>
-      );
-
+      return <span style={{ fontSize: "12px", color: "var(--at-text-2)" }}>{item.visibility}</span>;
     case "actions":
       return (
-        <button
-          className="at-row-action-btn"
-          aria-label={`More actions for ${item.name}`}
-          aria-haspopup="menu"
-          onClick={(e) => e.stopPropagation()}
-        >
-          ⋯
-        </button>
+        <button className="at-row-action-btn" aria-label={`More actions for ${item.name}`}
+          aria-haspopup="menu" onClick={(e) => e.stopPropagation()}>⋯</button>
       );
-
     default:
       return null;
   }
@@ -743,43 +700,17 @@ function CellContent({
    ============================================================ */
 
 function DataRow({
-  item,
-  rowIndex,
-  visibleCols,
-  isSelected,
-  onToggle,
-  onOpen,
+  item, rowIndex, visibleCols, isSelected, onToggle, onOpen,
 }: {
-  item: AssetItem;
-  rowIndex: number;
-  visibleCols: ColDef[];
-  isSelected: boolean;
-  onToggle: (id: string) => void;
-  onOpen: (item: AssetItem) => void;
+  item: AssetItem; rowIndex: number; visibleCols: ColDef[];
+  isSelected: boolean; onToggle: (id: string) => void; onOpen: (item: AssetItem) => void;
 }) {
   return (
-    <div
-      role="row"
-      aria-rowindex={rowIndex}
-      aria-selected={isSelected}
-      data-id={item.id}
-      className="at-data-row"
-      tabIndex={0}
-    >
+    <div role="row" aria-rowindex={rowIndex} aria-selected={isSelected}
+      data-id={item.id} className="at-data-row" tabIndex={0}>
       {visibleCols.map((col) => (
-        <div
-          key={col.id}
-          role="gridcell"
-          data-col-id={col.id}
-          className="at-cell"
-        >
-          <CellContent
-            col={col}
-            item={item}
-            onOpen={onOpen}
-            isSelected={isSelected}
-            onToggle={onToggle}
-          />
+        <div key={col.id} role="gridcell" data-col-id={col.id} className="at-cell">
+          <CellContent col={col} item={item} onOpen={onOpen} isSelected={isSelected} onToggle={onToggle} />
         </div>
       ))}
     </div>
@@ -791,59 +722,30 @@ function DataRow({
    ============================================================ */
 
 function GroupHeaderRow({
-  group,
-  onToggleExpand,
-  onToggleItems,
-  someSelected,
-  allSelected,
+  group, onToggleExpand, onToggleItems, someSelected, allSelected,
 }: {
-  group: GroupState;
-  onToggleExpand: (id: string) => void;
-  onToggleItems: (id: string) => void;
-  someSelected: boolean;
-  allSelected: boolean;
+  group: GroupState; onToggleExpand: (id: string) => void; onToggleItems: (id: string) => void;
+  someSelected: boolean; allSelected: boolean;
 }) {
   const cbRef = useCallback(
-    (el: HTMLInputElement | null) => {
-      if (el) {
-        el.indeterminate = someSelected && !allSelected;
-      }
-    },
+    (el: HTMLInputElement | null) => { if (el) el.indeterminate = someSelected && !allSelected; },
     [someSelected, allSelected]
   );
-
   return (
-    <div
-      role="row"
-      className="at-group-header-row"
-      data-group-id={group.id}
-      tabIndex={0}
-      aria-expanded={group.expanded}
+    <div role="row" className="at-group-header-row" data-group-id={group.id}
+      tabIndex={0} aria-expanded={group.expanded}
       onClick={() => onToggleExpand(group.id)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          onToggleExpand(group.id);
-        }
-      }}
-    >
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpand(group.id); } }}>
       <div role="gridcell" className="at-group-header-cell">
-        <input
-          type="checkbox"
-          className="at-group-checkbox"
+        <input type="checkbox" className="at-group-checkbox"
           aria-label={`Select all in ${group.label}`}
           aria-checked={allSelected ? "true" : someSelected ? "mixed" : "false"}
-          checked={allSelected}
-          ref={cbRef}
+          checked={allSelected} ref={cbRef}
           onChange={(e) => { e.stopPropagation(); onToggleItems(group.id); }}
-          onClick={(e) => e.stopPropagation()}
-        />
-        <button
-          className="at-group-toggle"
-          aria-expanded={group.expanded}
+          onClick={(e) => e.stopPropagation()} />
+        <button className="at-group-toggle" aria-expanded={group.expanded}
           aria-label={`${group.expanded ? "Collapse" : "Expand"} group ${group.label}`}
-          onClick={(e) => { e.stopPropagation(); onToggleExpand(group.id); }}
-        >
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(group.id); }}>
           <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
             <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
@@ -866,29 +768,68 @@ function GroupHeaderRow({
 }
 
 /* ============================================================
+   SUB-GROUP HEADER ROW
+   ============================================================ */
+
+function SubGroupHeaderRow({
+  subGroup, parentGroupId, onToggleExpand, onToggleItems, someSelected, allSelected,
+}: {
+  subGroup: SubGroupState; parentGroupId: string;
+  onToggleExpand: (gId: string, sgId: string) => void;
+  onToggleItems: (gId: string, sgId: string) => void;
+  someSelected: boolean; allSelected: boolean;
+}) {
+  const cbRef = useCallback(
+    (el: HTMLInputElement | null) => { if (el) el.indeterminate = someSelected && !allSelected; },
+    [someSelected, allSelected]
+  );
+  return (
+    <div role="row" className="at-sub-group-header-row"
+      tabIndex={0} aria-expanded={subGroup.expanded}
+      onClick={() => onToggleExpand(parentGroupId, subGroup.id)}
+      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onToggleExpand(parentGroupId, subGroup.id); } }}>
+      <div role="gridcell" className="at-group-header-cell at-sub-group-header-cell">
+        <input type="checkbox" className="at-group-checkbox"
+          aria-label={`Select all in ${subGroup.label}`}
+          checked={allSelected} ref={cbRef}
+          onChange={(e) => { e.stopPropagation(); onToggleItems(parentGroupId, subGroup.id); }}
+          onClick={(e) => e.stopPropagation()} />
+        <button className="at-group-toggle" aria-expanded={subGroup.expanded}
+          aria-label={`${subGroup.expanded ? "Collapse" : "Expand"} ${subGroup.label}`}
+          onClick={(e) => { e.stopPropagation(); onToggleExpand(parentGroupId, subGroup.id); }}>
+          <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="M5 3l4 4-4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+        <div className="at-group-header-cell__left">
+          <span className="at-group-header-cell__name at-sub-group-name">{subGroup.label}</span>
+          <span className="at-group-header-cell__count">({subGroup.count} assets)</span>
+        </div>
+        <div className="at-group-header-cell__right">
+          <span className="at-group-header-cell__metric" style={{ color: "var(--at-critical)" }}>
+            {subGroup.issues.critical}c critical
+          </span>
+          <span className="at-group-header-cell__metric">
+            Issues: {subGroup.issues.high}h {subGroup.issues.medium}m
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ============================================================
    FLOATING BULK BAR
    ============================================================ */
 
-function FloatingBulkBar({
-  count,
-  description,
-  onDeselect,
-}: {
-  count: number;
-  description: string;
-  onDeselect: () => void;
-}) {
+function FloatingBulkBar({ count, description, onDeselect }: { count: number; description: string; onDeselect: () => void }) {
   if (count === 0) return null;
   return (
     <div className="at-floating-bulk-bar" role="region" aria-label="Bulk actions">
       <div className="at-floating-bulk-bar__inner">
         <div className="at-floating-bulk-bar__selection">
           <span className="at-floating-bulk-bar__count">{description}</span>
-          <button
-            className="at-floating-bulk-bar__clear"
-            onClick={onDeselect}
-            aria-label="Clear selection"
-          >
+          <button className="at-floating-bulk-bar__clear" onClick={onDeselect} aria-label="Clear selection">
             <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
               <path d="M11 3L3 11M3 3l8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
             </svg>
@@ -897,20 +838,9 @@ function FloatingBulkBar({
         <div className="at-floating-bulk-bar__sep" />
         <div className="at-floating-bulk-bar__actions">
           {["Tag","Ignore","Export"].map((action) => (
-            <button
-              key={action}
-              className="at-floating-bulk-bar__btn"
-              data-action={action}
-            >
-              {action}
-            </button>
+            <button key={action} className="at-floating-bulk-bar__btn" data-action={action}>{action}</button>
           ))}
-          <button
-            className="at-floating-bulk-bar__btn at-floating-bulk-bar__btn--danger"
-            data-action="Delete"
-          >
-            Delete
-          </button>
+          <button className="at-floating-bulk-bar__btn at-floating-bulk-bar__btn--danger" data-action="Delete">Delete</button>
         </div>
       </div>
     </div>
@@ -921,19 +851,9 @@ function FloatingBulkBar({
    COLUMN TOGGLE PANEL
    ============================================================ */
 
-function ColTogglePanel({
-  columns,
-  onToggle,
-  onClose,
-}: {
-  columns: ColDef[];
-  onToggle: (id: ColId) => void;
-  onClose: () => void;
-}) {
+function ColTogglePanel({ columns, onToggle, onClose }: { columns: ColDef[]; onToggle: (id: ColId) => void; onClose: () => void }) {
   useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
@@ -941,18 +861,12 @@ function ColTogglePanel({
   return (
     <div className="at-dropdown-panel" role="dialog" aria-label="Column visibility">
       <h3 className="at-dropdown-panel__title">Columns</h3>
-      {columns
-        .filter((c) => !c.sticky && c.id !== "actions")
-        .map((col) => (
-          <label key={col.id} className="at-col-vis-item">
-            <input
-              type="checkbox"
-              checked={col.visible}
-              onChange={() => onToggle(col.id)}
-            />
-            {col.label}
-          </label>
-        ))}
+      {columns.filter((c) => !c.sticky && c.id !== "actions").map((col) => (
+        <label key={col.id} className="at-col-vis-item">
+          <input type="checkbox" checked={col.visible} onChange={() => onToggle(col.id)} />
+          {col.label}
+        </label>
+      ))}
     </div>
   );
 }
@@ -966,7 +880,7 @@ interface AssetTableProps {
 }
 
 export function AssetTable({ search }: AssetTableProps) {
-  /* ---- filtered dataset (search) ---- */
+  /* ---- filtered dataset ---- */
   const filteredDataset = useMemo<AssetItem[]>(() => {
     if (!search?.trim()) return DATASET;
     const q = search.toLowerCase();
@@ -980,11 +894,9 @@ export function AssetTable({ search }: AssetTableProps) {
   }, [search]);
 
   /* ---- column state ---- */
-  const [columns, setColumns] = useState<ColDef[]>(() =>
-    COLUMNS.map((c) => ({ ...c }))
-  );
+  const [columns, setColumns] = useState<ColDef[]>(() => COLUMNS.map((c) => ({ ...c })));
 
-  /* ---- flat infinite scroll state ---- */
+  /* ---- flat scroll state ---- */
   const [flatItems, setFlatItems] = useState<AssetItem[]>([]);
   const [cursor, setCursor] = useState(0);
   const [hasMore, setHasMore] = useState(true);
@@ -993,6 +905,9 @@ export function AssetTable({ search }: AssetTableProps) {
 
   /* ---- grouping state ---- */
   const [groupBy, setGroupBy] = useState<string | null>(null);
+  const [groupBy2, setGroupBy2] = useState<string | null>(null);
+  const [groupSortField, setGroupSortField] = useState<"label" | "count" | "critical">("label");
+  const [groupSortDir, setGroupSortDir] = useState<SortDir>("asc");
   const [groups, setGroups] = useState<GroupState[]>([]);
   const groupsRef = useRef<GroupState[]>([]);
   useEffect(() => { groupsRef.current = groups; }, [groups]);
@@ -1006,10 +921,8 @@ export function AssetTable({ search }: AssetTableProps) {
   const [sortCol, setSortCol] = useState<ColId | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
 
-  /* ---- density ---- */
+  /* ---- density / UI ---- */
   const [density, setDensity] = useState<Density>("comfortable");
-
-  /* ---- UI ---- */
   const [panelItem, setPanelItem] = useState<AssetItem | null>(null);
   const [colPanelOpen, setColPanelOpen] = useState(false);
   const [scrolledX, setScrolledX] = useState(false);
@@ -1042,49 +955,26 @@ export function AssetTable({ search }: AssetTableProps) {
     if (selMode === "none") return "0 items selected";
     if (selMode === "all") {
       const exc = selExcluded.size;
-      return exc > 0
-        ? `All items selected (${exc} excluded)`
-        : "All items in this view selected";
+      return exc > 0 ? `All items selected (${exc} excluded)` : "All items in this view selected";
     }
     return `${selIncluded.size} items selected`;
   }, [selMode, selIncluded, selExcluded]);
 
   const toggleItem = useCallback((id: string) => {
-    setSelMode((mode) => {
-      if (mode === "all") {
-        setSelExcluded((prev) => {
-          const next = new Set(prev);
-          next.has(id) ? next.delete(id) : next.add(id);
-          return next;
-        });
-        return "all";
-      } else {
-        setSelIncluded((prev) => {
-          const next = new Set(prev);
-          if (next.has(id)) {
-            next.delete(id);
-            if (next.size === 0) {
-              // Will set mode to none after
-            }
-            return next;
-          } else {
-            next.add(id);
-            return next;
-          }
-        });
-        // Recompute mode after state update
-        return mode; // will fix below
-      }
-    });
-
     setSelIncluded((prev) => {
-      // If not in "all" mode
       if (selMode === "all") return prev;
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       setSelMode(next.size === 0 ? "none" : "some");
       return next;
     });
+    if (selMode === "all") {
+      setSelExcluded((prev) => {
+        const next = new Set(prev);
+        next.has(id) ? next.delete(id) : next.add(id);
+        return next;
+      });
+    }
   }, [selMode]);
 
   const selectAll = useCallback(() => {
@@ -1098,46 +988,62 @@ export function AssetTable({ search }: AssetTableProps) {
     setSelExcluded(new Set());
   }, []);
 
-  const toggleGroupItems = useCallback(
-    (groupId: string) => {
+  /* Toggle all loaded items in a group (flattens sub-groups when groupBy2 is set) */
+  const getGroupLoadedItems = useCallback(
+    (groupId: string): AssetItem[] => {
       const group = groupsRef.current.find((g) => g.id === groupId);
-      if (!group || group.items.length === 0) return;
-      const allSel = group.items.every((item) => isSelected(item.id));
-      if (allSel) {
-        // Deselect group
+      if (!group) return [];
+      if (groupBy2 && group.subGroups) return group.subGroups.flatMap((sg) => sg.items);
+      return group.items;
+    },
+    [groupBy2]
+  );
+
+  const applySelectionChange = useCallback(
+    (items: AssetItem[], deselect: boolean) => {
+      if (deselect) {
         if (selMode === "all") {
-          setSelExcluded((prev) => {
-            const next = new Set(prev);
-            group.items.forEach((item) => next.add(item.id));
-            return next;
-          });
+          setSelExcluded((prev) => { const n = new Set(prev); items.forEach((i) => n.add(i.id)); return n; });
         } else {
           setSelIncluded((prev) => {
-            const next = new Set(prev);
-            group.items.forEach((item) => next.delete(item.id));
-            if (next.size === 0) setSelMode("none");
-            return next;
+            const n = new Set(prev);
+            items.forEach((i) => n.delete(i.id));
+            if (n.size === 0) setSelMode("none");
+            return n;
           });
         }
       } else {
-        // Select group
         if (selMode === "all") {
-          setSelExcluded((prev) => {
-            const next = new Set(prev);
-            group.items.forEach((item) => next.delete(item.id));
-            return next;
-          });
+          setSelExcluded((prev) => { const n = new Set(prev); items.forEach((i) => n.delete(i.id)); return n; });
         } else {
           setSelMode("some");
-          setSelIncluded((prev) => {
-            const next = new Set(prev);
-            group.items.forEach((item) => next.add(item.id));
-            return next;
-          });
+          setSelIncluded((prev) => { const n = new Set(prev); items.forEach((i) => n.add(i.id)); return n; });
         }
       }
     },
-    [selMode, isSelected]
+    [selMode]
+  );
+
+  const toggleGroupItems = useCallback(
+    (groupId: string) => {
+      const items = getGroupLoadedItems(groupId);
+      if (items.length === 0) return;
+      const allSel = items.every((item) => isSelected(item.id));
+      applySelectionChange(items, allSel);
+    },
+    [getGroupLoadedItems, isSelected, applySelectionChange]
+  );
+
+  const toggleSubGroupItems = useCallback(
+    (groupId: string, subGroupId: string) => {
+      const group = groupsRef.current.find((g) => g.id === groupId);
+      if (!group?.subGroups) return;
+      const sub = group.subGroups.find((sg) => sg.id === subGroupId);
+      if (!sub || sub.items.length === 0) return;
+      const allSel = sub.items.every((item) => isSelected(item.id));
+      applySelectionChange(sub.items, allSel);
+    },
+    [isSelected, applySelectionChange]
   );
 
   /* ============================================================
@@ -1146,17 +1052,7 @@ export function AssetTable({ search }: AssetTableProps) {
 
   const sortedFlatItems = useMemo<AssetItem[]>(() => {
     if (!sortCol) return flatItems;
-    return [...flatItems].sort((a, b) => {
-      let cmp = 0;
-      const aVal = String((a as unknown as Record<string, unknown>)[sortCol] ?? "");
-      const bVal = String((b as unknown as Record<string, unknown>)[sortCol] ?? "");
-      if (sortCol === "riskScore") {
-        cmp = (a.riskScore ?? 0) - (b.riskScore ?? 0);
-      } else {
-        cmp = aVal.localeCompare(bVal);
-      }
-      return sortDir === "asc" ? cmp : -cmp;
-    });
+    return sortItemsList(flatItems, sortCol, sortDir);
   }, [flatItems, sortCol, sortDir]);
 
   const loadMoreFlat = useCallback(async () => {
@@ -1165,11 +1061,7 @@ export function AssetTable({ search }: AssetTableProps) {
     abortRef.current = new AbortController();
     setLoadStatus("Loading assets…");
     try {
-      const result = await fetchPage(
-        filteredDataset,
-        cursor,
-        abortRef.current.signal
-      );
+      const result = await fetchPage(filteredDataset, cursor, abortRef.current.signal);
       setFlatItems((prev) => [...prev, ...result.items]);
       setCursor(result.nextCursor);
       setHasMore(result.hasMore);
@@ -1194,7 +1086,6 @@ export function AssetTable({ search }: AssetTableProps) {
      ============================================================ */
 
   useEffect(() => {
-    // Cancel any in-flight request
     abortRef.current?.abort();
     setFlatItems([]);
     setCursor(0);
@@ -1202,9 +1093,22 @@ export function AssetTable({ search }: AssetTableProps) {
     setLoading(false);
     setLoadStatus("");
     setGroups([]);
-    // loadMoreFlat will be triggered by the sentinel observer
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [filteredDataset, groupBy]);
+
+  /* Reset sub-groups when groupBy2 changes */
+  useEffect(() => {
+    setGroups((prev) => {
+      const updated = prev.map((g) => ({
+        ...g,
+        expanded: false,
+        subGroups: null,
+        subGroupsLoading: false,
+      }));
+      groupsRef.current = updated;
+      return updated;
+    });
+  }, [groupBy2]);
 
   /* ============================================================
      GROUP LOADING
@@ -1221,6 +1125,8 @@ export function AssetTable({ search }: AssetTableProps) {
         cursor: 0,
         hasMore: true,
         loading: false,
+        subGroups: null,
+        subGroupsLoading: false,
       }));
       setGroups(newGroups);
       groupsRef.current = newGroups;
@@ -1234,62 +1140,154 @@ export function AssetTable({ search }: AssetTableProps) {
       const group = groupsRef.current.find((g) => g.id === groupId);
       if (!group || group.loading || !group.hasMore) return;
 
-      // Mark loading
-      setGroups((prev) =>
-        prev.map((g) => (g.id === groupId ? { ...g, loading: true } : g))
-      );
+      setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, loading: true } : g));
 
       try {
-        const result = await fetchGroupPage(
-          filteredDataset,
-          groupId,
-          groupBy!,
-          group.cursor
-        );
+        const result = await fetchGroupPage(filteredDataset, groupId, groupBy!, group.cursor);
         setGroups((prev) => {
           const updated = prev.map((g) => {
             if (g.id !== groupId) return g;
-            return {
-              ...g,
-              items: [...g.items, ...result.items],
-              cursor: result.nextCursor,
-              hasMore: result.hasMore,
-              loading: false,
-            };
+            return { ...g, items: [...g.items, ...result.items], cursor: result.nextCursor, hasMore: result.hasMore, loading: false };
           });
           groupsRef.current = updated;
           return updated;
         });
       } catch (err) {
         console.error("Group load error:", err);
-        setGroups((prev) =>
-          prev.map((g) => (g.id === groupId ? { ...g, loading: false } : g))
-        );
+        setGroups((prev) => prev.map((g) => g.id === groupId ? { ...g, loading: false } : g));
       }
     },
     [filteredDataset, groupBy]
   );
 
+  const loadSubGroupMeta = useCallback(
+    async (groupId: string, gBy2: string) => {
+      setGroups((prev) => {
+        const updated = prev.map((g) => g.id === groupId ? { ...g, subGroupsLoading: true } : g);
+        groupsRef.current = updated;
+        return updated;
+      });
+
+      const primaryItems = filteredDataset.filter(
+        (item) => String((item as unknown as Record<string, unknown>)[groupBy!]) === groupId
+      );
+      const metas = await fetchGroupMetadata(primaryItems, gBy2);
+      const subGroups: SubGroupState[] = metas.map((sg) => ({
+        ...sg,
+        expanded: false,
+        items: [],
+        cursor: 0,
+        hasMore: true,
+        loading: false,
+      }));
+
+      setGroups((prev) => {
+        const updated = prev.map((g) =>
+          g.id === groupId ? { ...g, subGroups, subGroupsLoading: false } : g
+        );
+        groupsRef.current = updated;
+        return updated;
+      });
+    },
+    [filteredDataset, groupBy]
+  );
+
+  const loadSubGroupItems = useCallback(
+    async (groupId: string, subGroupId: string) => {
+      const group = groupsRef.current.find((g) => g.id === groupId);
+      if (!group?.subGroups) return;
+      const sub = group.subGroups.find((sg) => sg.id === subGroupId);
+      if (!sub || sub.loading || !sub.hasMore) return;
+
+      setGroups((prev) =>
+        prev.map((g) => {
+          if (g.id !== groupId || !g.subGroups) return g;
+          return { ...g, subGroups: g.subGroups.map((sg) => sg.id === subGroupId ? { ...sg, loading: true } : sg) };
+        })
+      );
+
+      try {
+        const result = await fetchSubGroupPage(filteredDataset, groupBy!, groupId, groupBy2!, subGroupId, sub.cursor);
+        setGroups((prev) => {
+          const updated = prev.map((g) => {
+            if (g.id !== groupId || !g.subGroups) return g;
+            return {
+              ...g,
+              subGroups: g.subGroups.map((sg) => {
+                if (sg.id !== subGroupId) return sg;
+                return { ...sg, items: [...sg.items, ...result.items], cursor: result.nextCursor, hasMore: result.hasMore, loading: false };
+              }),
+            };
+          });
+          groupsRef.current = updated;
+          return updated;
+        });
+      } catch (err) {
+        console.error("Sub-group load error:", err);
+        setGroups((prev) =>
+          prev.map((g) => {
+            if (g.id !== groupId || !g.subGroups) return g;
+            return { ...g, subGroups: g.subGroups.map((sg) => sg.id === subGroupId ? { ...sg, loading: false } : sg) };
+          })
+        );
+      }
+    },
+    [filteredDataset, groupBy, groupBy2]
+  );
+
   const toggleGroupExpand = useCallback(
     (groupId: string) => {
+      const group = groupsRef.current.find((g) => g.id === groupId);
+      const isExpanding = group ? !group.expanded : false;
+      const needsSubGroups = isExpanding && !!groupBy2 && !!group && group.subGroups === null;
+
       setGroups((prev) => {
         const updated = prev.map((g) => {
           if (g.id !== groupId) return g;
-          return { ...g, expanded: !g.expanded };
+          return {
+            ...g,
+            expanded: !g.expanded,
+            subGroupsLoading: needsSubGroups ? true : g.subGroupsLoading,
+          };
         });
         groupsRef.current = updated;
         return updated;
       });
-      // Loading is driven solely by GroupSentinel's IntersectionObserver
+
+      if (needsSubGroups) {
+        loadSubGroupMeta(groupId, groupBy2!);
+      }
     },
-    [loadGroupItems]
+    [groupBy2, loadSubGroupMeta]
+  );
+
+  const toggleSubGroupExpand = useCallback(
+    (groupId: string, subGroupId: string) => {
+      setGroups((prev) => {
+        const updated = prev.map((g) => {
+          if (g.id !== groupId || !g.subGroups) return g;
+          return {
+            ...g,
+            subGroups: g.subGroups.map((sg) =>
+              sg.id === subGroupId ? { ...sg, expanded: !sg.expanded } : sg
+            ),
+          };
+        });
+        groupsRef.current = updated;
+        return updated;
+      });
+    },
+    []
   );
 
   const handleGroupSentinelIntersect = useCallback(
-    (groupId: string) => {
-      loadGroupItems(groupId);
-    },
+    (groupId: string) => loadGroupItems(groupId),
     [loadGroupItems]
+  );
+
+  const handleSubGroupSentinelIntersect = useCallback(
+    (groupId: string, subGroupId: string) => loadSubGroupItems(groupId, subGroupId),
+    [loadSubGroupItems]
   );
 
   /* ============================================================
@@ -1297,20 +1295,17 @@ export function AssetTable({ search }: AssetTableProps) {
      ============================================================ */
 
   useEffect(() => {
-    if (groupBy) {
-      loadGroupMeta(groupBy);
-    }
+    if (groupBy) loadGroupMeta(groupBy);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupBy, filteredDataset]);
 
   /* ============================================================
-     MAIN INTERSECTION OBSERVER
+     MAIN INTERSECTION OBSERVER (flat mode)
      ============================================================ */
 
   const loadMoreFlatRef = useRef(loadMoreFlat);
   useEffect(() => { loadMoreFlatRef.current = loadMoreFlat; }, [loadMoreFlat]);
 
-  /* Keep --wrapper-width in sync so group headers can clamp to the visible width */
   useEffect(() => {
     const el = scrollWrapperRef.current;
     if (!el) return;
@@ -1325,11 +1320,8 @@ export function AssetTable({ search }: AssetTableProps) {
     mainObsRef.current?.disconnect();
     const el = sentinelRef.current;
     if (!el || groupBy) return;
-
     const obs = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) loadMoreFlatRef.current();
-      },
+      (entries) => { if (entries[0].isIntersecting) loadMoreFlatRef.current(); },
       { rootMargin: "200px" }
     );
     obs.observe(el);
@@ -1359,39 +1351,29 @@ export function AssetTable({ search }: AssetTableProps) {
      ============================================================ */
 
   const toggleColVisibility = useCallback((colId: ColId) => {
-    setColumns((prev) =>
-      prev.map((c) =>
-        c.id === colId && !c.sticky ? { ...c, visible: !c.visible } : c
-      )
-    );
+    setColumns((prev) => prev.map((c) => c.id === colId && !c.sticky ? { ...c, visible: !c.visible } : c));
   }, []);
 
   /* ============================================================
-     COMPUTED VALUES
+     COMPUTED
      ============================================================ */
 
-  const visibleCols = useMemo(
-    () => columns.filter((c) => c.visible),
-    [columns]
-  );
+  const visibleCols = useMemo(() => columns.filter((c) => c.visible), [columns]);
+  const colTemplate = useMemo(() => visibleCols.map((c) => c.width + "px").join(" "), [visibleCols]);
 
-  const colTemplate = useMemo(
-    () => visibleCols.map((c) => c.width + "px").join(" "),
-    [visibleCols]
+  const sortedGroups = useMemo(
+    () => sortGroupList(groups, groupSortField, groupSortDir),
+    [groups, groupSortField, groupSortDir]
   );
 
   const selectedCount = getSelectedCount();
   const selectionDesc = getSelectionDescription();
   const hasSelection = selectedCount > 0;
 
-  /* Header checkbox state */
   const headerCbAllChecked = selMode === "all" && selExcluded.size === 0;
   const headerCbIndeterminate = !headerCbAllChecked && selMode !== "none";
-
   const headerCbRef = useCallback(
-    (el: HTMLInputElement | null) => {
-      if (el) el.indeterminate = headerCbIndeterminate;
-    },
+    (el: HTMLInputElement | null) => { if (el) el.indeterminate = headerCbIndeterminate; },
     [headerCbIndeterminate]
   );
 
@@ -1399,63 +1381,93 @@ export function AssetTable({ search }: AssetTableProps) {
      RENDER
      ============================================================ */
 
-  const gridStyle = {
-    "--col-template": colTemplate,
-  } as React.CSSProperties;
+  const gridStyle = { "--col-template": colTemplate } as React.CSSProperties;
 
   return (
     <div className="at-table-container">
-      {/* Table toolbar */}
+      {/* Toolbar */}
       <div className="at-table-header">
         <div className="at-table-header__caption">
           <span className="at-table-header__title">Assets</span>
           <span className="at-table-header__divider">|</span>
-          <span className="at-table-header__count" id="at-total-count">
-            {filteredDataset.length.toLocaleString()} assets
-          </span>
+          <span className="at-table-header__count">{filteredDataset.length.toLocaleString()} assets</span>
         </div>
         <div className="at-table-header__actions">
-          {/* Group by */}
-          <div className="at-segmented-control">
-            <label htmlFor="at-group-select" className="at-segmented-control__label">
-              Group by:
-            </label>
-            <select
-              id="at-group-select"
-              className="at-segmented-select"
-              value={groupBy ?? ""}
-              onChange={(e) => {
-                const val = e.target.value;
-                setGroupBy(val || null);
-              }}
-            >
-              <option value="">None</option>
-              <option value="assetClass">Class</option>
-              <option value="team">Team</option>
-              <option value="type">Type</option>
-              <option value="environment">Environment</option>
-            </select>
+          {/* Grouping controls */}
+          <div className="at-grouping-controls">
+            <div className="at-segmented-control">
+              <label htmlFor="at-group-select" className="at-segmented-control__label">Group by:</label>
+              <select
+                id="at-group-select"
+                className="at-segmented-select"
+                value={groupBy ?? ""}
+                onChange={(e) => {
+                  const val = e.target.value || null;
+                  setGroupBy(val);
+                  if (!val) setGroupBy2(null);
+                }}
+              >
+                <option value="">None</option>
+                {GROUP_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+
+            {groupBy && (
+              <div className="at-segmented-control">
+                <label className="at-segmented-control__label">then by:</label>
+                <select
+                  className="at-segmented-select"
+                  value={groupBy2 ?? ""}
+                  onChange={(e) => setGroupBy2(e.target.value || null)}
+                >
+                  <option value="">None</option>
+                  {GROUP_OPTIONS.filter((o) => o.value !== groupBy).map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {groupBy && (
+              <>
+                <div className="at-grouping-sep" />
+                <div className="at-segmented-control">
+                  <label className="at-segmented-control__label">Sort groups:</label>
+                  <select
+                    className="at-segmented-select"
+                    value={groupSortField}
+                    onChange={(e) => setGroupSortField(e.target.value as "label" | "count" | "critical")}
+                  >
+                    <option value="label">Name</option>
+                    <option value="count">Count</option>
+                    <option value="critical">Issues</option>
+                  </select>
+                  <button
+                    className="at-sort-dir-btn"
+                    onClick={() => setGroupSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                    aria-label={`Sort direction: ${groupSortDir}`}
+                    title={groupSortDir === "asc" ? "Ascending – click to reverse" : "Descending – click to reverse"}
+                  >
+                    {groupSortDir === "asc" ? "↑" : "↓"}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Density toggle */}
           <div className="at-density-toggle" role="group" aria-label="Row density">
-            <button
-              className={`at-density-btn ${density === "comfortable" ? "active" : ""}`}
-              aria-pressed={density === "comfortable"}
-              title="Comfortable density"
-              onClick={() => setDensity("comfortable")}
-            >
+            <button className={`at-density-btn ${density === "comfortable" ? "active" : ""}`}
+              aria-pressed={density === "comfortable"} title="Comfortable density"
+              onClick={() => setDensity("comfortable")}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="4" rx="1" fill="currentColor" opacity="0.7"/>
                 <rect x="1" y="8" width="14" height="4" rx="1" fill="currentColor" opacity="0.4"/>
               </svg>
             </button>
-            <button
-              className={`at-density-btn ${density === "compact" ? "active" : ""}`}
-              aria-pressed={density === "compact"}
-              title="Compact density"
-              onClick={() => setDensity("compact")}
-            >
+            <button className={`at-density-btn ${density === "compact" ? "active" : ""}`}
+              aria-pressed={density === "compact"} title="Compact density"
+              onClick={() => setDensity("compact")}>
               <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true">
                 <rect x="1" y="2" width="14" height="2.5" rx="1" fill="currentColor" opacity="0.7"/>
                 <rect x="1" y="6" width="14" height="2.5" rx="1" fill="currentColor" opacity="0.5"/>
@@ -1466,12 +1478,9 @@ export function AssetTable({ search }: AssetTableProps) {
 
           {/* Column toggle */}
           <div className="at-toolbar-item">
-            <button
-              className="at-icon-btn at-icon-btn--labeled"
-              aria-expanded={colPanelOpen}
-              aria-haspopup="dialog"
-              onClick={(e) => { e.stopPropagation(); setColPanelOpen((v) => !v); }}
-            >
+            <button className="at-icon-btn at-icon-btn--labeled"
+              aria-expanded={colPanelOpen} aria-haspopup="dialog"
+              onClick={(e) => { e.stopPropagation(); setColPanelOpen((v) => !v); }}>
               <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
                 <rect x="1" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.5"/>
                 <rect x="8" y="1" width="5" height="12" rx="1" stroke="currentColor" strokeWidth="1.5"/>
@@ -1479,11 +1488,7 @@ export function AssetTable({ search }: AssetTableProps) {
               Columns
             </button>
             {colPanelOpen && (
-              <ColTogglePanel
-                columns={columns}
-                onToggle={toggleColVisibility}
-                onClose={() => setColPanelOpen(false)}
-              />
+              <ColTogglePanel columns={columns} onToggle={toggleColVisibility} onClose={() => setColPanelOpen(false)} />
             )}
           </div>
         </div>
@@ -1498,9 +1503,7 @@ export function AssetTable({ search }: AssetTableProps) {
               Select all {filteredDataset.length.toLocaleString()}
             </button>
           )}
-          <button className="at-selection-bar__link" onClick={deselectAll}>
-            Deselect all
-          </button>
+          <button className="at-selection-bar__link" onClick={deselectAll}>Deselect all</button>
         </div>
       )}
 
@@ -1508,87 +1511,42 @@ export function AssetTable({ search }: AssetTableProps) {
       <div
         ref={scrollWrapperRef}
         className={`at-grid-scroll-wrapper ${scrolledX ? "at-scrolled-x" : ""}`}
-        onScroll={() => {
-          setScrolledX((scrollWrapperRef.current?.scrollLeft ?? 0) > 0);
-        }}
+        onScroll={() => setScrolledX((scrollWrapperRef.current?.scrollLeft ?? 0) > 0)}
       >
-        {/* Grid */}
-        <div
-          role="grid"
-          className={`at-grid at-density-${density}`}
-          style={gridStyle}
-          aria-rowcount={filteredDataset.length}
-          aria-colcount={visibleCols.length}
-        >
+        <div role="grid" className={`at-grid at-density-${density}`} style={gridStyle}
+          aria-rowcount={filteredDataset.length} aria-colcount={visibleCols.length}>
+
           {/* Header */}
           <div className="at-grid-head">
             <div role="row" className="at-header-row">
               {visibleCols.map((col, colIndex) => {
-                const ariaSort =
-                  col.sortable
-                    ? sortCol === col.id
-                      ? sortDir === "asc"
-                        ? ("ascending" as const)
-                        : ("descending" as const)
-                      : ("none" as const)
-                    : undefined;
+                const ariaSort = col.sortable
+                  ? sortCol === col.id ? (sortDir === "asc" ? "ascending" as const : "descending" as const) : "none" as const
+                  : undefined;
 
                 if (col.id === "select") {
                   return (
-                    <div
-                      key="select"
-                      role="columnheader"
-                      data-col-id="select"
-                      className="at-cell"
-                      aria-colindex={colIndex + 1}
-                    >
-                      <input
-                        type="checkbox"
-                        id="at-header-checkbox"
-                        aria-label="Select all visible rows"
-                        checked={headerCbAllChecked}
-                        ref={headerCbRef}
-                        onChange={() => {
-                          selMode === "all" ? deselectAll() : selectAll();
-                        }}
-                      />
+                    <div key="select" role="columnheader" data-col-id="select" className="at-cell" aria-colindex={colIndex + 1}>
+                      <input type="checkbox" id="at-header-checkbox" aria-label="Select all visible rows"
+                        checked={headerCbAllChecked} ref={headerCbRef}
+                        onChange={() => selMode === "all" ? deselectAll() : selectAll()} />
                     </div>
                   );
                 }
 
                 return (
-                  <div
-                    key={col.id}
-                    role="columnheader"
-                    data-col-id={col.id}
+                  <div key={col.id} role="columnheader" data-col-id={col.id}
                     className={`at-cell${col.sortable ? " at-sortable" : ""}`}
-                    aria-colindex={colIndex + 1}
-                    aria-sort={ariaSort}
+                    aria-colindex={colIndex + 1} aria-sort={ariaSort}
                     tabIndex={col.sortable ? 0 : undefined}
-                    onKeyDown={
-                      col.sortable
-                        ? (e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              handleSort(col.id);
-                            }
-                          }
-                        : undefined
-                    }
-                  >
+                    onKeyDown={col.sortable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort(col.id); } } : undefined}>
                     {col.label ? (
                       col.sortable ? (
-                        <button
-                          className="at-col-sort-btn"
-                          aria-label={`Sort by ${col.label}`}
-                          onClick={() => handleSort(col.id)}
-                        >
+                        <button className="at-col-sort-btn" aria-label={`Sort by ${col.label}`} onClick={() => handleSort(col.id)}>
                           {col.label}
                           <span className="at-sort-indicator" aria-hidden="true" />
                         </button>
-                      ) : (
-                        col.label
-                      )
+                      ) : col.label
                     ) : null}
                   </div>
                 );
@@ -1600,72 +1558,92 @@ export function AssetTable({ search }: AssetTableProps) {
           <div id="at-grid-body">
             {groupBy ? (
               /* Grouped mode */
-              groups.map((group) => (
-                <div key={group.id}>
-                  <GroupHeaderRow
-                    group={group}
-                    onToggleExpand={toggleGroupExpand}
-                    onToggleItems={toggleGroupItems}
-                    someSelected={
-                      group.items.length > 0 &&
-                      group.items.some((item) => isSelected(item.id))
-                    }
-                    allSelected={
-                      group.items.length > 0 &&
-                      group.items.every((item) => isSelected(item.id))
-                    }
-                  />
-                  {group.expanded && (
-                    <div data-group-body={group.id} className="at-group-body">
-                      {group.loading && group.items.length === 0 && (
-                        <div className="at-group-loading">Loading…</div>
-                      )}
-                      {group.items.map((item, idx) => (
-                        <DataRow
-                          key={item.id}
-                          item={item}
-                          rowIndex={idx + 1}
-                          visibleCols={visibleCols}
-                          isSelected={isSelected(item.id)}
-                          onToggle={toggleItem}
-                          onOpen={setPanelItem}
-                        />
-                      ))}
-                      {group.hasMore && (
-                        <GroupSentinel
-                          groupId={group.id}
-                          onIntersect={handleGroupSentinelIntersect}
-                        />
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))
+              sortedGroups.map((group) => {
+                const groupLoadedItems = groupBy2 && group.subGroups
+                  ? group.subGroups.flatMap((sg) => sg.items)
+                  : group.items;
+
+                return (
+                  <div key={group.id}>
+                    <GroupHeaderRow
+                      group={group}
+                      onToggleExpand={toggleGroupExpand}
+                      onToggleItems={toggleGroupItems}
+                      someSelected={groupLoadedItems.length > 0 && groupLoadedItems.some((item) => isSelected(item.id))}
+                      allSelected={groupLoadedItems.length > 0 && groupLoadedItems.every((item) => isSelected(item.id))}
+                    />
+                    {group.expanded && (
+                      <div data-group-body={group.id} className="at-group-body">
+                        {groupBy2 ? (
+                          /* Two-level mode */
+                          group.subGroupsLoading || group.subGroups === null ? (
+                            <div className="at-group-loading">Loading groups…</div>
+                          ) : (
+                            sortGroupList(group.subGroups, groupSortField, groupSortDir).map((sub) => (
+                              <div key={sub.id}>
+                                <SubGroupHeaderRow
+                                  subGroup={sub}
+                                  parentGroupId={group.id}
+                                  onToggleExpand={toggleSubGroupExpand}
+                                  onToggleItems={toggleSubGroupItems}
+                                  someSelected={sub.items.length > 0 && sub.items.some((item) => isSelected(item.id))}
+                                  allSelected={sub.items.length > 0 && sub.items.every((item) => isSelected(item.id))}
+                                />
+                                {sub.expanded && (
+                                  <div className="at-sub-group-body">
+                                    {sub.loading && sub.items.length === 0 && (
+                                      <div className="at-group-loading">Loading…</div>
+                                    )}
+                                    {sortItemsList(sub.items, sortCol, sortDir).map((item, idx) => (
+                                      <DataRow key={item.id} item={item} rowIndex={idx + 1}
+                                        visibleCols={visibleCols} isSelected={isSelected(item.id)}
+                                        onToggle={toggleItem} onOpen={setPanelItem} />
+                                    ))}
+                                    {sub.hasMore && (
+                                      <SubGroupSentinel
+                                        groupId={group.id} subGroupId={sub.id}
+                                        onIntersect={handleSubGroupSentinelIntersect} />
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ))
+                          )
+                        ) : (
+                          /* Single-level mode */
+                          <>
+                            {group.loading && group.items.length === 0 && (
+                              <div className="at-group-loading">Loading…</div>
+                            )}
+                            {sortItemsList(group.items, sortCol, sortDir).map((item, idx) => (
+                              <DataRow key={item.id} item={item} rowIndex={idx + 1}
+                                visibleCols={visibleCols} isSelected={isSelected(item.id)}
+                                onToggle={toggleItem} onOpen={setPanelItem} />
+                            ))}
+                            {group.hasMore && (
+                              <GroupSentinel groupId={group.id} onIntersect={handleGroupSentinelIntersect} />
+                            )}
+                          </>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })
             ) : (
               /* Flat mode */
               <>
                 {sortedFlatItems.map((item, idx) => (
-                  <DataRow
-                    key={item.id}
-                    item={item}
-                    rowIndex={idx + 1}
-                    visibleCols={visibleCols}
-                    isSelected={isSelected(item.id)}
-                    onToggle={toggleItem}
-                    onOpen={setPanelItem}
-                  />
+                  <DataRow key={item.id} item={item} rowIndex={idx + 1}
+                    visibleCols={visibleCols} isSelected={isSelected(item.id)}
+                    onToggle={toggleItem} onOpen={setPanelItem} />
                 ))}
               </>
             )}
 
-            {/* Main sentinel (flat mode) */}
+            {/* Flat sentinel */}
             {!groupBy && (
-              <div
-                ref={sentinelRef}
-                className="at-sentinel"
-                aria-hidden="true"
-                id="at-sentinel"
-              />
+              <div ref={sentinelRef} className="at-sentinel" aria-hidden="true" id="at-sentinel" />
             )}
           </div>
         </div>
@@ -1673,29 +1651,13 @@ export function AssetTable({ search }: AssetTableProps) {
 
       {/* Footer */}
       <div className="at-table-footer">
-        <span className="at-load-status" aria-live="polite" id="at-load-status">
-          {loadStatus}
-        </span>
+        <span className="at-load-status" aria-live="polite">{loadStatus}</span>
       </div>
 
-      {/* Floating bulk bar */}
-      <FloatingBulkBar
-        count={selectedCount}
-        description={selectionDesc}
-        onDeselect={deselectAll}
-      />
-
-      {/* Detail panel */}
+      <FloatingBulkBar count={selectedCount} description={selectionDesc} onDeselect={deselectAll} />
       <DetailPanel item={panelItem} onClose={() => setPanelItem(null)} />
 
-      {/* SR announcer */}
-      <div
-        id="at-announcer"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-        className="at-sr-only"
-      />
+      <div id="at-announcer" role="status" aria-live="polite" aria-atomic="true" className="at-sr-only" />
     </div>
   );
 }
