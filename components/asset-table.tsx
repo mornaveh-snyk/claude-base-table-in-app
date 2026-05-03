@@ -902,11 +902,23 @@ function GroupPanel({
   onChange: (levels: GroupLevel[]) => void;
 }) {
   const usedFields = new Set(groupLevels.map((l) => l.field));
+  const addLevel = () => {
+    const first = GROUP_OPTIONS.find((o) => !usedFields.has(o.value));
+    if (first) onChange([...groupLevels, { field: first.value, order: "label-asc" }]);
+  };
+
+  if (groupLevels.length === 0) {
+    return (
+      <div className="at-cp-callout">
+        <button className="at-cp-callout-btn" onClick={addLevel}>
+          + Add a group level
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
-      {groupLevels.length === 0 && (
-        <div className="at-cp-empty">No grouping applied</div>
-      )}
       {groupLevels.map((level, i) => (
         <div key={i} className="at-cp-row">
           <select
@@ -949,19 +961,9 @@ function GroupPanel({
       ))}
       <div className="at-cp-footer">
         {groupLevels.length < GROUP_OPTIONS.length && (
-          <button
-            className="at-cp-add"
-            onClick={() => {
-              const first = GROUP_OPTIONS.find((o) => !usedFields.has(o.value));
-              if (first) onChange([...groupLevels, { field: first.value, order: "label-asc" }]);
-            }}
-          >
-            + Add level
-          </button>
+          <button className="at-cp-add" onClick={addLevel}>+ Add level</button>
         )}
-        {groupLevels.length > 0 && (
-          <button className="at-cp-clear" onClick={() => onChange([])}>Clear all</button>
-        )}
+        <button className="at-cp-clear" onClick={() => onChange([])}>Clear all</button>
       </div>
     </>
   );
@@ -978,11 +980,23 @@ function SortPanel({
 }) {
   const sortableCols = columns.filter((c) => c.sortable && c.id !== "select" && c.id !== "actions");
   const usedCols = new Set(sortRules.map((r) => r.col));
+  const addRule = () => {
+    const first = sortableCols.find((c) => !usedCols.has(c.id));
+    if (first) onChange([...sortRules, { col: first.id, dir: "asc" }]);
+  };
+
+  if (sortRules.length === 0) {
+    return (
+      <div className="at-cp-callout">
+        <button className="at-cp-callout-btn" onClick={addRule}>
+          + Add a sort rule
+        </button>
+      </div>
+    );
+  }
+
   return (
     <>
-      {sortRules.length === 0 && (
-        <div className="at-cp-empty">No sort applied</div>
-      )}
       {sortRules.map((rule, i) => (
         <div key={i} className="at-cp-row">
           <select
@@ -1023,13 +1037,7 @@ function SortPanel({
       ))}
       <div className="at-cp-footer">
         {sortRules.length < sortableCols.length && (
-          <button
-            className="at-cp-add"
-            onClick={() => {
-              const first = sortableCols.find((c) => !usedCols.has(c.id));
-              if (first) onChange([...sortRules, { col: first.id, dir: "asc" }]);
-            }}
-          >
+          <button className="at-cp-add" onClick={addRule}>
             + Add sort rule
           </button>
         )}
