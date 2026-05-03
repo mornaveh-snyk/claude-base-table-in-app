@@ -1451,6 +1451,34 @@ export function AssetTable({ search }: AssetTableProps) {
                     {groupSortDir === "asc" ? "↑" : "↓"}
                   </button>
                 </div>
+                <div className="at-grouping-sep" />
+                <div className="at-segmented-control">
+                  <label className="at-segmented-control__label">Sort items:</label>
+                  <select
+                    className="at-segmented-select"
+                    value={sortCol ?? ""}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setSortCol(v ? v as ColId : null);
+                      setSortDir("asc");
+                    }}
+                  >
+                    <option value="">None</option>
+                    {COLUMNS.filter((c) => c.sortable && c.id !== "select" && c.id !== "actions").map((c) => (
+                      <option key={c.id} value={c.id}>{c.label}</option>
+                    ))}
+                  </select>
+                  {sortCol && (
+                    <button
+                      className="at-sort-dir-btn"
+                      onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+                      aria-label={`Item sort direction: ${sortDir}`}
+                      title={sortDir === "asc" ? "Ascending – click to reverse" : "Descending – click to reverse"}
+                    >
+                      {sortDir === "asc" ? "↑" : "↓"}
+                    </button>
+                  )}
+                </div>
               </>
             )}
           </div>
