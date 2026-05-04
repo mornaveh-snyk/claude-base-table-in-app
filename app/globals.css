@@ -1386,3 +1386,131 @@
   cursor: pointer;
   accent-color: #4f46e5;
 }
+
+/* === COL HEADER INNER (wraps sort btn + group btn) === */
+.at-col-header-inner {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  gap: 2px;
+}
+.at-col-header-inner .at-col-sort-btn {
+  flex: 1;
+}
+
+/* === GROUP BTN IN HEADER (in-headers mode) === */
+.at-col-group-btn {
+  flex-shrink: 0;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  color: var(--at-text-3);
+  display: inline-flex;
+  align-items: center;
+  opacity: 0;
+  transition: opacity 0.12s, background 0.12s, color 0.12s;
+  line-height: 1;
+}
+.at-sortable:hover .at-col-group-btn,
+.at-col-group-btn--active {
+  opacity: 1;
+}
+.at-col-group-btn:hover {
+  background: var(--at-row-hover);
+  color: var(--at-text-1);
+}
+.at-col-group-btn--active {
+  color: var(--at-accent);
+  background: color-mix(in srgb, var(--at-accent) 10%, transparent);
+}
+
+/* Grouped column header highlight */
+.at-col--grouped {
+  background: color-mix(in srgb, var(--at-accent) 6%, transparent) !important;
+}
+
+/* In-headers mode: make idle ⇅ more visible on hover */
+[data-view-mode="in-headers"] [aria-sort="none"] .at-sort-indicator::after {
+  opacity: 0.3;
+}
+[data-view-mode="in-headers"] .at-sortable:hover [aria-sort="none"] .at-sort-indicator::after {
+  opacity: 1;
+}
+
+/* === ACTIVE STATE CHIPS (in-headers mode toolbar) === */
+.at-active-chips {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+.at-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 6px 3px 8px;
+  background: color-mix(in srgb, var(--at-accent) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--at-accent) 30%, transparent);
+  border-radius: 128px;
+  font-size: 12px;
+  color: var(--at-accent);
+  white-space: nowrap;
+}
+.at-active-chip__remove {
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 0 2px;
+  font-size: 14px;
+  line-height: 1;
+  color: var(--at-accent);
+  opacity: 0.7;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 50%;
+}
+.at-active-chip__remove:hover { opacity: 1; }
+
+/* === MODE SWITCHER (fixed bottom-right) === */
+.at-mode-switcher {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--at-surface);
+  border: 1px solid var(--at-border);
+  border-radius: 8px;
+  padding: 5px 6px;
+  box-shadow: 0 2px 16px rgba(0,0,0,0.18);
+  z-index: 9999;
+  font-family: inherit;
+}
+.at-mode-switcher__label {
+  font-size: 12px;
+  color: var(--at-text-3);
+  padding: 0 6px 0 2px;
+  white-space: nowrap;
+}
+.at-mode-switcher__btn {
+  padding: 4px 10px;
+  border: none;
+  border-radius: 5px;
+  background: transparent;
+  font-size: 12px;
+  color: var(--at-text-2);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+  font-family: inherit;
+}
+.at-mode-switcher__btn:hover { background: var(--at-row-hover); }
+.at-mode-switcher__btn--active {
+  background: var(--at-text-1);
+  color: var(--at-surface);
+}
+.at-mode-switcher__btn--active:hover { background: var(--at-text-1); }

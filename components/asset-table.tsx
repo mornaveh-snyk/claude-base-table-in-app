@@ -68,6 +68,8 @@ const GROUP_OPTIONS = [
   { value: "environment",label: "Environment" },
 ];
 
+const GROUPABLE_COL_IDS = new Set(GROUP_OPTIONS.map((o) => o.value));
+
 /* ============================================================
    DATA GENERATOR
    ============================================================ */
@@ -1096,6 +1098,9 @@ export function AssetTable({ search }: AssetTableProps) {
   const sortCol = sortRules[0]?.col ?? null;
   const sortDir = sortRules[0]?.dir ?? "asc";
 
+  /* ---- view mode ---- */
+  const [viewMode, setViewMode] = useState<"above-table" | "in-headers">("above-table");
+
   /* ---- density / UI ---- */
   const [density, setDensity] = useState<Density>("comfortable");
   const [panelItem, setPanelItem] = useState<AssetItem | null>(null);
@@ -1522,6 +1527,12 @@ export function AssetTable({ search }: AssetTableProps) {
     []
   );
 
+  const handleHeaderGroup = useCallback((colId: string) => {
+    setGroupLevels((prev) =>
+      prev[0]?.field === colId ? [] : [{ field: colId, order: "label-asc" }]
+    );
+  }, []);
+
   /* ============================================================
      COLUMN VISIBILITY
      ============================================================ */
@@ -1570,45 +1581,73 @@ export function AssetTable({ search }: AssetTableProps) {
         </div>
         <div className="at-table-header__actions">
 
-          {/* Group */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className={`at-toolbar-btn${groupLevels.length > 0 ? " at-toolbar-btn--active" : ""}`}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <rect x="1" y="1" width="12" height="3.5" rx="1" fill="currentColor"/>
-                  <rect x="1" y="6" width="12" height="3.5" rx="1" fill="currentColor" opacity="0.55"/>
-                  <rect x="1" y="11" width="8" height="2" rx="1" fill="currentColor" opacity="0.3"/>
-                </svg>
-                Group
-                {groupLevels.length > 0 && (
-                  <span className="at-toolbar-btn__badge">{groupLevels.length}</span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
-              <div className="at-cp-header">Group by</div>
-              <GroupPanel groupLevels={groupLevels} onChange={setGroupLevels} />
-            </PopoverContent>
-          </Popover>
+          {/* Above-table mode: Group + Sort popover buttons */}
+          {viewMode === "above-table" && (
+            <>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={`at-toolbar-btn${groupLevels.length > 0 ? " at-toolbar-btn--active" : ""}`}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <rect x="1" y="1" width="12" height="3.5" rx="1" fill="currentColor"/>
+                      <rect x="1" y="6" width="12" height="3.5" rx="1" fill="currentColor" opacity="0.55"/>
+                      <rect x="1" y="11" width="8" height="2" rx="1" fill="currentColor" opacity="0.3"/>
+                    </svg>
+                    Group
+                    {groupLevels.length > 0 && (
+                      <span className="at-toolbar-btn__badge">{groupLevels.length}</span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
+                  <div className="at-cp-header">Group by</div>
+                  <GroupPanel groupLevels={groupLevels} onChange={setGroupLevels} />
+                </PopoverContent>
+              </Popover>
 
-          {/* Sort */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <button className={`at-toolbar-btn${sortRules.length > 0 ? " at-toolbar-btn--active" : ""}`}>
-                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-                  <path d="M2 3h10M3.5 7h7M5.5 11h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-                </svg>
-                Sort
-                {sortRules.length > 0 && (
-                  <span className="at-toolbar-btn__badge">{sortRules.length}</span>
-                )}
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
-              <div className="at-cp-header">Sort items</div>
-              <SortPanel sortRules={sortRules} columns={columns} onChange={setSortRules} />
-            </PopoverContent>
-          </Popover>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button className={`at-toolbar-btn${sortRules.length > 0 ? " at-toolbar-btn--active" : ""}`}>
+                    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                      <path d="M2 3h10M3.5 7h7M5.5 11h3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+                    </svg>
+                    Sort
+                    {sortRules.length > 0 && (
+                      <span className="at-toolbar-btn__badge">{sortRules.length}</span>
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="p-0 w-80 overflow-hidden" align="end" sideOffset={6}>
+                  <div className="at-cp-header">Sort items</div>
+                  <SortPanel sortRules={sortRules} columns={columns} onChange={setSortRules} />
+                </PopoverContent>
+              </Popover>
+            </>
+          )}
+
+          {/* In-headers mode: active state chips */}
+          {viewMode === "in-headers" && (groupLevels.length > 0 || sortRules.length > 0) && (
+            <div className="at-active-chips">
+              {groupLevels[0] && (
+                <span className="at-active-chip">
+                  <svg width="10" height="10" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                    <rect x="0.5" y="0.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1"/>
+                    <rect x="5.5" y="0.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1"/>
+                    <rect x="0.5" y="5.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1"/>
+                    <rect x="5.5" y="5.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1"/>
+                  </svg>
+                  {GROUP_OPTIONS.find((o) => o.value === groupLevels[0].field)?.label ?? groupLevels[0].field}
+                  <button className="at-active-chip__remove" onClick={() => setGroupLevels([])} aria-label="Remove grouping">×</button>
+                </span>
+              )}
+              {sortRules[0] && (
+                <span className="at-active-chip">
+                  {sortRules[0].dir === "asc" ? "↑" : "↓"}{" "}
+                  {columns.find((c) => c.id === sortRules[0].col)?.label ?? sortRules[0].col}
+                  <button className="at-active-chip__remove" onClick={() => setSortRules([])} aria-label="Remove sort">×</button>
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Density toggle */}
           <div className="at-density-toggle" role="group" aria-label="Row density">
@@ -1668,7 +1707,7 @@ export function AssetTable({ search }: AssetTableProps) {
         className={`at-grid-scroll-wrapper ${scrolledX ? "at-scrolled-x" : ""}`}
         onScroll={() => setScrolledX((scrollWrapperRef.current?.scrollLeft ?? 0) > 0)}
       >
-        <div role="grid" className={`at-grid at-density-${density}`} style={gridStyle}
+        <div role="grid" className={`at-grid at-density-${density}`} data-view-mode={viewMode} style={gridStyle}
           aria-rowcount={filteredDataset.length} aria-colcount={visibleCols.length}>
 
           {/* Header */}
@@ -1689,18 +1728,36 @@ export function AssetTable({ search }: AssetTableProps) {
                   );
                 }
 
+                const isGrouped = groupBy === col.id;
                 return (
                   <div key={col.id} role="columnheader" data-col-id={col.id}
-                    className={`at-cell${col.sortable ? " at-sortable" : ""}`}
+                    className={`at-cell${col.sortable ? " at-sortable" : ""}${isGrouped ? " at-col--grouped" : ""}`}
                     aria-colindex={colIndex + 1} aria-sort={ariaSort}
                     tabIndex={col.sortable ? 0 : undefined}
                     onKeyDown={col.sortable ? (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); handleSort(col.id); } } : undefined}>
                     {col.label ? (
                       col.sortable ? (
-                        <button className="at-col-sort-btn" aria-label={`Sort by ${col.label}`} onClick={() => handleSort(col.id)}>
-                          {col.label}
-                          <span className="at-sort-indicator" aria-hidden="true" />
-                        </button>
+                        <div className="at-col-header-inner">
+                          <button className="at-col-sort-btn" aria-label={`Sort by ${col.label}`} onClick={() => handleSort(col.id)}>
+                            {col.label}
+                            <span className="at-sort-indicator" aria-hidden="true" />
+                          </button>
+                          {viewMode === "in-headers" && GROUPABLE_COL_IDS.has(col.id) && (
+                            <button
+                              className={`at-col-group-btn${isGrouped ? " at-col-group-btn--active" : ""}`}
+                              title={isGrouped ? "Remove grouping" : `Group by ${col.label}`}
+                              aria-label={isGrouped ? "Remove grouping" : `Group by ${col.label}`}
+                              onClick={(e) => { e.stopPropagation(); handleHeaderGroup(col.id); }}
+                            >
+                              <svg width="11" height="11" viewBox="0 0 10 10" fill="none" aria-hidden="true">
+                                <rect x="0.5" y="0.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1.2"/>
+                                <rect x="5.5" y="0.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1.2"/>
+                                <rect x="0.5" y="5.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1.2"/>
+                                <rect x="5.5" y="5.5" width="4" height="4" rx="0.75" stroke="currentColor" strokeWidth="1.2"/>
+                              </svg>
+                            </button>
+                          )}
+                        </div>
                       ) : col.label
                     ) : null}
                   </div>
@@ -1813,6 +1870,19 @@ export function AssetTable({ search }: AssetTableProps) {
       <DetailPanel item={panelItem} onClose={() => setPanelItem(null)} />
 
       <div id="at-announcer" role="status" aria-live="polite" aria-atomic="true" className="at-sr-only" />
+
+      {/* Mode switcher — fixed bottom-right */}
+      <div className="at-mode-switcher" role="group" aria-label="Sort and group interaction mode">
+        <span className="at-mode-switcher__label">Sort &amp; Group:</span>
+        <button
+          className={`at-mode-switcher__btn${viewMode === "above-table" ? " at-mode-switcher__btn--active" : ""}`}
+          onClick={() => setViewMode("above-table")}
+        >Above table</button>
+        <button
+          className={`at-mode-switcher__btn${viewMode === "in-headers" ? " at-mode-switcher__btn--active" : ""}`}
+          onClick={() => setViewMode("in-headers")}
+        >In headers</button>
+      </div>
     </div>
   );
 }
